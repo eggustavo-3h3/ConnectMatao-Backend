@@ -7,15 +7,11 @@ using connectMatao.Domain.Entities;
 using connectMatao.Enumerator;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
-using System.Net.Mail;
-using System.Net;
-using System.Runtime.Intrinsics.X86;
 using connectMatao.Domain.DTOs.Login;
 using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 internal class Program
@@ -29,13 +25,43 @@ internal class Program
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
 
-        builder.Services.AddSwaggerGen(c =>
+        builder.Services.AddSwaggerGen(config =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo
+            config.SwaggerDoc("v1", new OpenApiInfo
             {
                 Title = "Connect Matão API", 
                 Version = "v1",
                 Description = "API para gerenciamento de eventos no Connect Matão"
+            });
+
+            config.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Description = @"<b>JWT Autorização</b> <br/> 
+                      Digite 'Bearer' [espaço] e em seguida seu token na caixa de texto abaixo.
+                      <br/> <br/>
+                      <b>Exemplo:</b> 'bearer 123456abcdefg...'",
+                Name = "Authorization",
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.ApiKey,
+                Scheme = "Bearer"
+            });
+
+            config.AddSecurityRequirement(new OpenApiSecurityRequirement()
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        },
+                        Scheme = "oauth2",
+                        Name = "Bearer",
+                        In = ParameterLocation.Header
+                    },
+                    new List<string>()
+                }
             });
         });
 
@@ -56,14 +82,11 @@ internal class Program
 
         WebApplication app = builder.Build();
 
-        if (app.Environment.IsDevelopment())
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
         {
-            app.UseSwagger();
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Connect Matão API v1");
-            });
-        }
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Connect Matão API v1");
+        });
 
         app.UseHttpsRedirection();
         app.UseAuthentication();
@@ -80,7 +103,7 @@ internal class Program
             }).AsEnumerable();
 
             return Results.Ok(listaCategoriaDto);
-        });
+        }).RequireAuthorization().WithTags("Categoria");
 
 
         app.MapPost("categoria/adicionar", (ConnectMataoContext context, CategoriaAdicionarDto categoriaDto, ClaimsPrincipal user) =>
@@ -101,9 +124,7 @@ internal class Program
             context.SaveChanges();
 
             return Results.Created("Created", new BaseResponse("Categoria Registrada com Sucesso!"));
-        }).RequireAuthorization();
-
-
+        }).RequireAuthorization().WithTags("Categoria");
 
         #endregion
 
@@ -145,9 +166,7 @@ internal class Program
             await context.SaveChangesAsync();
 
             return Results.Created("Created", new BaseResponse("Usuário cadastrado com sucesso!"));
-        });
-
-    
+        }).RequireAuthorization().WithTags("Usuário");
 
         // Endpoint para listar usuarios
         app.MapGet("/usuario/listar", async (ConnectMataoContext context) =>
@@ -162,7 +181,7 @@ internal class Program
             }).ToListAsync();
 
             return Results.Ok(usuarios);
-        });
+        }).RequireAuthorization().WithTags("Usuário");
 
         // Endpoint para remover usuário
         app.MapDelete("/usuario/{id}", async (ConnectMataoContext context, Guid id) =>
@@ -178,7 +197,7 @@ internal class Program
             await context.SaveChangesAsync();
 
             return Results.Ok( new BaseResponse("Usuário removido com sucesso!"));
-        });
+        }).RequireAuthorization().WithTags("Usuário");
 
         #endregion
 
@@ -222,7 +241,7 @@ internal class Program
             await context.SaveChangesAsync();
 
             return Results.Created("Created", new BaseResponse("Evento adicionado com sucesso!"));
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Evento");
 
         // Endpoint para remover evento
         app.MapDelete("/evento/remover/{id}", async (ConnectMataoContext context, Guid id, ClaimsPrincipal user) =>
@@ -243,7 +262,7 @@ internal class Program
             }
 
             return Results.Forbid(); 
-        }).RequireAuthorization();
+        }).RequireAuthorization().WithTags("Evento");
 
         // Endpoint para listar eventos
         app.MapGet("/evento/listar", async (ConnectMataoContext context) =>
@@ -268,7 +287,8 @@ internal class Program
             }).ToListAsync();
 
             return Results.Ok(eventos);
-        });
+        }).RequireAuthorization().WithTags("Evento");
+
         #endregion
 
         #region controller autenticação
@@ -289,10 +309,10 @@ internal class Program
 
             var claims = new[]
             {
-        new Claim(ClaimTypes.Name, usuario.Nome),
-        new Claim(ClaimTypes.Role, usuario.Perfil.ToString()), 
-        new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()) 
-    };
+                new Claim(ClaimTypes.Name, usuario.Nome),
+                new Claim(ClaimTypes.Role, usuario.Perfil.ToString()),
+                new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString())
+            };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("aacd9108-22d7-4ef5-9296-a2c5923fdf5d"));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -310,7 +330,7 @@ internal class Program
                 Token = new JwtSecurityTokenHandler().WriteToken(token),
                 Expiration = DateTime.Now.AddDays(1)
             });
-        });
+        }).WithTags("Autenticação");
 
         #endregion
 
