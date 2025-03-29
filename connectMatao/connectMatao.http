@@ -1,0 +1,6 @@
+@connectMatao_HostAddress = http://localhost:5177
+
+GET {{connectMatao_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
