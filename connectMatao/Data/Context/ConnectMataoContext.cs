@@ -10,7 +10,7 @@ namespace connectMatao.Data.Context
         public DbSet<Evento> EventoSet { get; set; }
         public DbSet<Categoria> CategoriaSet { get; set; }
         public DbSet<EventoEstatisticas> EventoEstatisticaSet { get; set; }
-
+        public DbSet<EventoImagens> EventoImagemSet { get; set; }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             var conexao = "Server=mysql.tccnapratica.com.br;Port=3306;Database=tccnapratica13;User=tccnapratica13;Password=Etec3h3;";

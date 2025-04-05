@@ -13,12 +13,14 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using connectMatao.Domain.DTOs.EventoImagem;
 
 internal class Program
 {
     private static void Main(string[] args)
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
 
         builder.Services.AddDbContext<ConnectMataoContext>();
 
@@ -29,7 +31,7 @@ internal class Program
         {
             config.SwaggerDoc("v1", new OpenApiInfo
             {
-                Title = "Connect Matão API", 
+                Title = "Connect Matão API",
                 Version = "v1",
                 Description = "API para gerenciamento de eventos no Connect Matão"
             });
@@ -82,11 +84,21 @@ internal class Program
 
         WebApplication app = builder.Build();
 
+        // Adicionando suporte ao CORS
+        builder.Services.AddCors();
+
         app.UseSwagger();
         app.UseSwaggerUI(c =>
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Connect Matão API v1");
         });
+
+        // Configuração de CORS
+        app.UseCors(x => x
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+           );
 
         app.UseHttpsRedirection();
         app.UseAuthentication();
@@ -112,7 +124,7 @@ internal class Program
 
             if (perfil != EnumPerfil.Parceiro.ToString() && perfil != EnumPerfil.Administrador.ToString())
             {
-                return Results.Forbid(); 
+                return Results.Forbid();    
             }
 
             context.CategoriaSet.Add(new Categoria
@@ -133,12 +145,12 @@ internal class Program
         {
             if (usuarioDto.Senha != usuarioDto.ConfirmacaoSenha)
             {
-               return Results.BadRequest(new BaseResponse("As senhas não coincidem."));
+                return Results.BadRequest(new BaseResponse("As senhas não coincidem."));
             }
 
             if (string.IsNullOrEmpty(usuarioDto.Senha) || usuarioDto.Senha.Length < 8)
-            { 
-               return Results.BadRequest(new BaseResponse("A senha deve ter no mínimo 8 caracteres."));
+            {
+                return Results.BadRequest(new BaseResponse("A senha deve ter no mínimo 8 caracteres."));
             }
 
             if (!usuarioDto.Senha.Any(char.IsUpper))
@@ -196,7 +208,7 @@ internal class Program
             context.Set<Usuario>().Remove(usuario);
             await context.SaveChangesAsync();
 
-            return Results.Ok( new BaseResponse("Usuário removido com sucesso!"));
+            return Results.Ok(new BaseResponse("Usuário removido com sucesso!"));
         }).RequireAuthorization().WithTags("Usuário");
 
         #endregion
@@ -209,7 +221,7 @@ internal class Program
 
             if (perfil != EnumPerfil.Parceiro.ToString() && perfil != EnumPerfil.Administrador.ToString())
             {
-                return Results.Forbid(); 
+                return Results.Forbid();
             }
 
             var usuarioParceiro = await context.Set<Usuario>().FindAsync(eventoDto.UsuarioParceiroid);
@@ -261,7 +273,7 @@ internal class Program
                 return Results.Ok(new BaseResponse("Evento removido com Sucesso!"));
             }
 
-            return Results.Forbid(); 
+            return Results.Forbid();
         }).RequireAuthorization().WithTags("Evento");
 
         // Endpoint para listar eventos
@@ -289,6 +301,57 @@ internal class Program
             return Results.Ok(eventos);
         }).RequireAuthorization().WithTags("Evento");
 
+        // Endpoint para listar eventos de um usuário específico
+        app.MapGet("/evento/listar/usuario/{usuarioId:guid}", async (ConnectMataoContext context, Guid usuarioId) =>
+        {
+            var eventosDoUsuario = await context.Set<Evento>()
+                .Where(e => e.UsuarioParceiroid == usuarioId)
+                .Select(e => new
+                {
+                    e.Id,
+                    e.Titulo,
+                    e.Descricao,
+                    Data = e.Data.ToString("yyyy-MM-dd"),
+                    e.Horario,
+                    Endereco = e.Logradouro,
+                    e.Bairro,
+                    e.Numero,
+                    e.Logradouro,
+                    e.Cep,
+                    e.Email,
+                    e.Telefone,
+                    e.Whatsapp,
+                    e.FaixaEtaria,
+                    UsuarioParceiroid = e.UsuarioParceiroid.ToString(),
+                    Categoriaid = e.Categoriaid.ToString(),
+                    UsuarioNome = context.Set<Usuario>().Where(u => u.Id == e.UsuarioParceiroid).Select(u => u.Nome).FirstOrDefault(),
+                    UsuarioImagem = context.Set<Usuario>().Where(u => u.Id == e.UsuarioParceiroid).Select(u => u.Imagem).FirstOrDefault(),
+                })
+                .ToListAsync();
+
+            return Results.Ok(eventosDoUsuario);
+        }).RequireAuthorization().WithTags("Evento");
+
+
+        app.MapGet("evento/{eventoId:guid}/imagens", async (Guid eventoId, ConnectMataoContext context) =>
+        {
+            var imagens = await context.EventoImagemSet
+                .Where(ei => ei.EventoId == eventoId)
+                .Select(ei => new EventoImagemListarDto
+                {
+                    Id = ei.Id,
+                    Imagem = ei.Imagem,
+                    EventoId = ei.EventoId
+                })
+                .ToListAsync();
+
+            if (imagens == null || !imagens.Any())
+            {
+                return Results.NotFound(new BaseResponse("Nenhuma imagem encontrada para este evento."));
+            }
+
+            return Results.Ok(imagens);
+        }).RequireAuthorization().WithTags("Evento");
         #endregion
 
         #region controller autenticação
@@ -328,7 +391,8 @@ internal class Program
             return Results.Ok(new
             {
                 Token = new JwtSecurityTokenHandler().WriteToken(token),
-                Expiration = DateTime.Now.AddDays(1)
+                Expiration = DateTime.Now.AddDays(1),
+                Role = usuario.Perfil.ToString()
             });
         }).WithTags("Autenticação");
 
