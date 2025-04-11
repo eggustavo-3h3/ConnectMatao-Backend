@@ -23,8 +23,9 @@
         #region Propriedade de Navegabilidade
 
         public virtual Usuario UsuarioParceiro { get; set; }
-        public virtual Categoria Categoria { get; set; } 
+        public virtual Categoria Categoria { get; set; }
 
+        public virtual ICollection<EventoImagens> EventoImagens { get; set; }
         #endregion
 
         public Evento(

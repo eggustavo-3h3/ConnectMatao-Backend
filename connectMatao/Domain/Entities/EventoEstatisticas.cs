@@ -8,7 +8,7 @@ namespace connectMatao.Domain.Entities
         public EnumTipoEstatistica TipoEstatistica { get; set; }
         public Guid Usuarioid { get; set; } 
         public Guid Eventoid { get; set; }
-
+        
         public virtual Usuario Usuario { get; set; }
         public virtual Evento Evento { get; set; }
 

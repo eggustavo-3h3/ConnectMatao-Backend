@@ -38,10 +38,10 @@ internal class Program
 
             config.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
-                Description = @"<b>JWT Autorização</b> <br/> 
-                      Digite 'Bearer' [espaço] e em seguida seu token na caixa de texto abaixo.
-                      <br/> <br/>
-                      <b>Exemplo:</b> 'bearer 123456abcdefg...'",
+                Description = @"<b>JWT Autorização</b> <br/>
+                            Digite 'Bearer' [espaço] e em seguida seu token na caixa de texto abaixo.
+                            <br/> <br/>
+                            <b>Exemplo:</b> 'bearer 123456abcdefg...'",
                 Name = "Authorization",
                 In = ParameterLocation.Header,
                 Type = SecuritySchemeType.ApiKey,
@@ -115,7 +115,7 @@ internal class Program
             }).AsEnumerable();
 
             return Results.Ok(listaCategoriaDto);
-        }).RequireAuthorization().WithTags("Categoria");
+        }).WithTags("Categoria");
 
 
         app.MapPost("categoria/adicionar", (ConnectMataoContext context, CategoriaAdicionarDto categoriaDto, ClaimsPrincipal user) =>
@@ -124,7 +124,7 @@ internal class Program
 
             if (perfil != EnumPerfil.Parceiro.ToString() && perfil != EnumPerfil.Administrador.ToString())
             {
-                return Results.Forbid();    
+                return Results.Forbid();
             }
 
             context.CategoriaSet.Add(new Categoria
@@ -178,7 +178,7 @@ internal class Program
             await context.SaveChangesAsync();
 
             return Results.Created("Created", new BaseResponse("Usuário cadastrado com sucesso!"));
-        }).RequireAuthorization().WithTags("Usuário");
+        }).WithTags("Usuário");
 
         // Endpoint para listar usuarios
         app.MapGet("/usuario/listar", async (ConnectMataoContext context) =>
@@ -193,7 +193,27 @@ internal class Program
             }).ToListAsync();
 
             return Results.Ok(usuarios);
-        }).RequireAuthorization().WithTags("Usuário");
+        }).WithTags("Usuário");
+
+        // Endpoint para obter um usuário por ID
+        app.MapGet("/usuario/{id:guid}", async (ConnectMataoContext context, Guid id) =>
+        {
+            var usuario = await context.Set<Usuario>().FindAsync(id);
+
+            if (usuario == null)
+            {
+                return Results.NotFound();
+            }
+
+            return Results.Ok(new
+            {
+                usuario.Id,
+                usuario.Nome,
+                usuario.Login,
+                usuario.Imagem,
+                usuario.Perfil
+            });
+        }).WithTags("Usuário");
 
         // Endpoint para remover usuário
         app.MapDelete("/usuario/{id}", async (ConnectMataoContext context, Guid id) =>
@@ -211,25 +231,62 @@ internal class Program
             return Results.Ok(new BaseResponse("Usuário removido com sucesso!"));
         }).RequireAuthorization().WithTags("Usuário");
 
+        // Endpoint para atualizar informações do usuário
+        app.MapPut("/usuario/atualizar", async (ConnectMataoContext context, UsuarioAtualizar usuarioDto, ClaimsPrincipal user) =>
+        {
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(userIdClaim, out var loggedInUserId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var usuario = await context.Set<Usuario>().FindAsync(loggedInUserId);
+
+            if (usuario == null)
+            {
+                return Results.NotFound("Usuário não encontrado.");
+            }
+
+            // Atualiza as propriedades permitidas
+            if (!string.IsNullOrEmpty(usuarioDto.Nome))
+            {
+                if (!usuarioDto.Nome.Any(char.IsUpper))
+                {
+                    return Results.BadRequest(new BaseResponse("O nome deve começar com pelo menos uma letra maiúscula"));
+                }
+                usuario.Nome = usuarioDto.Nome;
+            }
+            if (!string.IsNullOrEmpty(usuarioDto.Login))
+            {
+                // Adicionar lógica para verificar se o novo login já existe, se necessário
+                usuario.Login = usuarioDto.Login;
+            }
+            if (usuarioDto.Imagem != null) // Permite atualizar ou manter a imagem
+            {
+                usuario.Imagem = usuarioDto.Imagem;
+            }
+
+            try
+            {
+                await context.SaveChangesAsync();
+                return Results.Ok(new BaseResponse("Informações do usuário atualizadas com sucesso!"));
+            }
+            catch (DbUpdateException ex)
+            {
+                // Logar o erro específico
+                Console.WriteLine($"Erro ao atualizar usuário: {ex.Message}");
+                return Results.BadRequest( new BaseResponse("Erro ao atualizar informações do usuário."));
+            }
+        }).RequireAuthorization().WithTags("Usuário");
+
+
         #endregion
 
         #region Evento
         // Endpoint para adicionar evento
         app.MapPost("/evento/adicionar", async (ConnectMataoContext context, EventoAdicionarDto eventoDto, ClaimsPrincipal user) =>
         {
-            var perfil = user.FindFirst(ClaimTypes.Role)?.Value;
-
-            if (perfil != EnumPerfil.Parceiro.ToString() && perfil != EnumPerfil.Administrador.ToString())
-            {
-                return Results.Forbid();
-            }
-
-            var usuarioParceiro = await context.Set<Usuario>().FindAsync(eventoDto.UsuarioParceiroid);
-
-            if (usuarioParceiro == null || usuarioParceiro.Perfil != EnumPerfil.Parceiro)
-            {
-                return Results.BadRequest(new BaseResponse("Usuário Parceiro Inválido. Apenas usuários parceiros podem criar eventos."));
-            }
+        
 
             var evento = new Evento(
                 eventoDto.Titulo,
@@ -251,6 +308,17 @@ internal class Program
 
             context.Set<Evento>().Add(evento);
             await context.SaveChangesAsync();
+
+            if (!string.IsNullOrEmpty(eventoDto.Imagem))
+            {
+                context.EventoImagemSet.Add(new EventoImagens
+                {
+                    Id = Guid.NewGuid(),
+                    EventoId = evento.Id,
+                    Imagem = eventoDto.Imagem
+                });
+                await context.SaveChangesAsync();
+            }
 
             return Results.Created("Created", new BaseResponse("Evento adicionado com sucesso!"));
         }).RequireAuthorization().WithTags("Evento");
@@ -279,39 +347,44 @@ internal class Program
         // Endpoint para listar eventos
         app.MapGet("/evento/listar", async (ConnectMataoContext context) =>
         {
-            var eventos = await context.Set<Evento>().Select(e => new
-            {
-                e.Id,
-                e.Titulo,
-                e.Descricao,
-                e.Cep,
-                e.Logradouro,
-                e.Numero,
-                e.Bairro,
-                e.Telefone,
-                e.Email,
-                e.Data,
-                e.Horario,
-                e.FaixaEtaria,
-                e.FlagAprovado,
-                e.UsuarioParceiroid,
-                e.Categoriaid
-            }).ToListAsync();
+            var eventos = await context.Set<Evento>()
+                .Include(e => e.UsuarioParceiro)
+                .Select(e => new
+                {
+                    e.Id,
+                    e.Titulo,
+                    e.Descricao,
+                    e.Cep,
+                    e.Logradouro,
+                    e.Numero,
+                    e.Bairro,
+                    e.Telefone,
+                    e.Email,
+                    e.Data,
+                    e.Horario,
+                    e.FaixaEtaria,
+                    e.FlagAprovado,
+                    e.UsuarioParceiroid,
+                    e.Categoriaid,
+                    UsuarioNome = e.UsuarioParceiro.Nome,
+                    UsuarioImagem = e.UsuarioParceiro.Imagem,
+                }).ToListAsync();
 
             return Results.Ok(eventos);
-        }).RequireAuthorization().WithTags("Evento");
+        }).WithTags("Evento");
 
         // Endpoint para listar eventos de um usuário específico
         app.MapGet("/evento/listar/usuario/{usuarioId:guid}", async (ConnectMataoContext context, Guid usuarioId) =>
         {
             var eventosDoUsuario = await context.Set<Evento>()
                 .Where(e => e.UsuarioParceiroid == usuarioId)
+                .Include(e => e.UsuarioParceiro) // Inclui a entidade Usuario
                 .Select(e => new
                 {
                     e.Id,
                     e.Titulo,
                     e.Descricao,
-                    Data = e.Data.ToString("yyyy-MM-dd"),
+                    Data = e.Data,
                     e.Horario,
                     Endereco = e.Logradouro,
                     e.Bairro,
@@ -324,13 +397,13 @@ internal class Program
                     e.FaixaEtaria,
                     UsuarioParceiroid = e.UsuarioParceiroid.ToString(),
                     Categoriaid = e.Categoriaid.ToString(),
-                    UsuarioNome = context.Set<Usuario>().Where(u => u.Id == e.UsuarioParceiroid).Select(u => u.Nome).FirstOrDefault(),
-                    UsuarioImagem = context.Set<Usuario>().Where(u => u.Id == e.UsuarioParceiroid).Select(u => u.Imagem).FirstOrDefault(),
+                    UsuarioNome = e.UsuarioParceiro.Nome, // Acessa o nome do usuário
+                    UsuarioImagem = e.UsuarioParceiro.Imagem // Acessa a imagem do usuário
                 })
                 .ToListAsync();
 
             return Results.Ok(eventosDoUsuario);
-        }).RequireAuthorization().WithTags("Evento");
+        }).WithTags("Evento");
 
 
         app.MapGet("evento/{eventoId:guid}/imagens", async (Guid eventoId, ConnectMataoContext context) =>
@@ -351,7 +424,122 @@ internal class Program
             }
 
             return Results.Ok(imagens);
+        }).WithTags("Evento");
+
+        app.MapGet("/evento/{id:guid}/detalhe", async (ConnectMataoContext context, Guid id) =>
+        {
+            var evento = await context.Set<Evento>()
+                .Where(e => e.Id == id)
+                .Include(e => e.UsuarioParceiro)
+                .Include(e => e.EventoImagens) // Correctly include the collection of images
+                .Select(e => new EventoDetalheDto
+                {
+                    Id = e.Id,
+                    Titulo = e.Titulo,
+                    Descricao = e.Descricao,
+                    Cep = e.Cep,
+                    Logradouro = e.Logradouro,
+                    Numero = e.Numero,
+                    Bairro = e.Bairro,
+                    Telefone = e.Telefone,
+                    Email = e.Email,
+                    Data = e.Data,
+                    Horario = e.Horario,
+                    FaixaEtaria = e.FaixaEtaria,
+                    FlagAprovado = e.FlagAprovado,
+                    UsuarioParceiroid = e.UsuarioParceiroid,
+                    Categoriaid = e.Categoriaid,
+                    UsuarioNome = e.UsuarioParceiro.Nome,
+                    UsuarioImagem = e.UsuarioParceiro.Imagem,
+                    Imagens = e.EventoImagens.Select(img => new EventoImagemDto { Imagem = img.Imagem }).ToList(),
+                    Whatsapp = e.Whatsapp
+                })
+                .FirstOrDefaultAsync();
+
+            if (evento == null)
+            {
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
+            }
+
+            return Results.Ok(evento);
+        }).WithTags("Evento");
+
+
+        // Endpoint para dar Like em um evento
+        app.MapPost("/eventos/{eventoId:guid}/likes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
+        {
+            var usuarioIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(usuarioIdClaim, out var usuarioId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var evento = await context.Set<Evento>().FindAsync(eventoId);
+            if (evento == null)
+            {
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
+            }
+
+            context.EventoEstatisticaSet.Add(new EventoEstatisticas
+            {
+                Id = Guid.NewGuid(),
+                Eventoid = eventoId,
+                Usuarioid = usuarioId,
+                TipoEstatistica = EnumTipoEstatistica.Like
+            });
+
+            await context.SaveChangesAsync();
+            return Results.Ok(new BaseResponse("Like adicionado ao evento."));
         }).RequireAuthorization().WithTags("Evento");
+
+        // Endpoint para dar Deslike em um evento
+        app.MapPost("/eventos/{eventoId:guid}/deslikes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
+        {
+            var usuarioIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(usuarioIdClaim, out var usuarioId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var evento = await context.Set<Evento>().FindAsync(eventoId);
+            if (evento == null)
+            {
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
+            }
+
+            context.EventoEstatisticaSet.Add(new EventoEstatisticas
+            {
+                Id = Guid.NewGuid(),
+                Eventoid = eventoId,
+                Usuarioid = usuarioId,
+                TipoEstatistica = EnumTipoEstatistica.Deslike
+            });
+
+            await context.SaveChangesAsync();
+            return Results.Ok(new BaseResponse("Deslike adicionado ao evento."));
+        }).RequireAuthorization().WithTags("Evento");
+
+        // Endpoint para obter estatísticas de um evento (likes e deslikes)
+        app.MapGet("/eventos/{eventoId:guid}/estatisticas", async (Guid eventoId, ConnectMataoContext context) =>
+        {
+            var evento = await context.Set<Evento>().FindAsync(eventoId);
+            if (evento == null)
+            {
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
+            }
+
+            var likes = await context.EventoEstatisticaSet
+                .CountAsync(es => es.Eventoid == eventoId && es.TipoEstatistica == EnumTipoEstatistica.Like);
+
+            var deslikes = await context.EventoEstatisticaSet
+                .CountAsync(es => es.Eventoid == eventoId && es.TipoEstatistica == EnumTipoEstatistica.Deslike);
+
+            return Results.Ok(new
+            {
+                likes = likes,
+                deslikes = deslikes
+            });
+        }).WithTags("Evento");
         #endregion
 
         #region controller autenticação
@@ -401,53 +589,3 @@ internal class Program
         app.Run();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-using System;
-using System.Net;
-using System.Net.Mail;
-
-public class EnviarEmail
-{
-    public static void Main(string[] args)
-    {
-        MailMessage mensagem = new MailMessage();
-        mensagem.From = new MailAddress("seuemail@dominio.com");
-        mensagem.To.Add("destinatario@dominio.com");
-        mensagem.Subject = "Assunto do Email";
-        mensagem.Body = "Corpo do email aqui.";
-
-        SmtpClient clienteSmtp = new SmtpClient("smtp.dominio.com");
-        clienteSmtp.Port = 587;
-        clienteSmtp.Credentials = new NetworkCredential("seuemail@dominio.com", "suasenha");
-        clienteSmtp.EnableSsl = true;
-
-        try
-        {
-            clienteSmtp.Send(mensagem);
-            Console.WriteLine("Email enviado com sucesso!");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Erro ao enviar email: " + ex.Message);
-        }
-    }
-}*/
