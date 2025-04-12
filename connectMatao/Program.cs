@@ -480,13 +480,15 @@ internal class Program
                 return Results.NotFound(new BaseResponse("Evento não encontrado."));
             }
 
-            context.EventoEstatisticaSet.Add(new EventoEstatisticas
+            var x = new EventoEstatisticas
             {
                 Id = Guid.NewGuid(),
                 Eventoid = eventoId,
                 Usuarioid = usuarioId,
                 TipoEstatistica = EnumTipoEstatistica.Like
-            });
+            };
+
+            context.EventoEstatisticaSet.Add(x);
 
             await context.SaveChangesAsync();
             return Results.Ok(new BaseResponse("Like adicionado ao evento."));
