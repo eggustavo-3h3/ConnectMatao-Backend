@@ -18,14 +18,14 @@
         public bool FlagAprovado { get; set; }
         public Guid UsuarioParceiroid { get; set; }
         public Guid Categoriaid { get; set; }
-        public IEnumerable<EventoEstatisticas> Estatisticas { get; set; } = [];
+        public List<EventoEstatisticas> Estatisticas { get; set; } = [];
 
         #region Propriedade de Navegabilidade
 
         public virtual Usuario UsuarioParceiro { get; set; }
         public virtual Categoria Categoria { get; set; }
 
-        public virtual ICollection<EventoImagens> EventoImagens { get; set; }
+        public virtual List<EventoImagens> EventoImagens { get; set; }
         #endregion
 
         public Evento(

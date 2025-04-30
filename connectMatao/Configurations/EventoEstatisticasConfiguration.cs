@@ -10,6 +10,8 @@ namespace connectMatao.Configurations
         {
             builder.HasKey(e => e.Id);
             builder.Property(u => u.TipoEstatistica).IsRequired();
+            builder.Property(u => u.Usuarioid).IsRequired();
+            builder.Property(u => u.Eventoid).IsRequired();
 
             builder.ToTable("TB_EventoEstatistica");
         }

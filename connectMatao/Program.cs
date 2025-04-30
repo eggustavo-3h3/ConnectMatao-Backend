@@ -285,10 +285,7 @@ internal class Program
 
         #region Evento
         // Endpoint para adicionar evento
-        app.MapPost("/evento/adicionar", async (
-     ConnectMataoContext context,
-     [FromForm] EventoAdicionarDto eventoDto,
-     ClaimsPrincipal user) =>
+        app.MapPost("/evento/adicionar", (ConnectMataoContext context, EventoAdicionarDto eventoDto, ClaimsPrincipal user) =>
         {
             var evento = new Evento(
                 eventoDto.Titulo,
@@ -309,7 +306,6 @@ internal class Program
             );
 
             context.Set<Evento>().Add(evento);
-            await context.SaveChangesAsync();
 
             if (!string.IsNullOrEmpty(eventoDto.Imagem))
             {
@@ -319,8 +315,9 @@ internal class Program
                     EventoId = evento.Id,
                     Imagem = eventoDto.Imagem  
                 });
-                await context.SaveChangesAsync();
             }
+
+            context.SaveChanges();
 
             return Results.Created("Created", new BaseResponse("Evento adicionado com sucesso!"));
         })
@@ -475,7 +472,7 @@ internal class Program
 
 
         // Endpoint para dar Like em um evento
-        app.MapPost("/eventos/{eventoId:guid}/likes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
+        app.MapPost("/eventos/{eventoId:guid}/likes", (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
         {
             var usuarioIdClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!Guid.TryParse(usuarioIdClaim, out var usuarioId))
@@ -483,23 +480,21 @@ internal class Program
                 return Results.Unauthorized();
             }
 
-            var evento = await context.Set<Evento>().FindAsync(eventoId);
+            var evento = context.Set<Evento>().FindAsync(eventoId);
             if (evento == null)
             {
                 return Results.NotFound(new BaseResponse("Evento não encontrado."));
             }
 
-            var x = new EventoEstatisticas
+            context.EventoEstatisticaSet.Add(new EventoEstatisticas
             {
                 Id = Guid.NewGuid(),
                 Eventoid = eventoId,
                 Usuarioid = usuarioId,
                 TipoEstatistica = EnumTipoEstatistica.Like
-            };
+            });
 
-            context.EventoEstatisticaSet.Add(x);
-
-            await context.SaveChangesAsync();
+            context.SaveChanges();
             return Results.Ok(new BaseResponse("Like adicionado ao evento."));
         }).RequireAuthorization().WithTags("Evento");
 
