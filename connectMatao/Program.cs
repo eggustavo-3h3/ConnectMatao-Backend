@@ -317,7 +317,7 @@ internal class Program
                 {
                     Id = Guid.NewGuid(),
                     EventoId = evento.Id,
-                    Imagem = eventoDto.Imagem
+                    Imagem = eventoDto.Imagem  
                 });
                 await context.SaveChangesAsync();
             }
@@ -326,6 +326,8 @@ internal class Program
         })
  .RequireAuthorization()
  .WithTags("Evento");
+
+
 
 
         // Endpoint para remover evento
