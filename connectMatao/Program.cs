@@ -14,6 +14,7 @@ using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using connectMatao.Domain.DTOs.EventoImagem;
+using Microsoft.AspNetCore.Mvc;
 
 internal class Program
 {
@@ -284,10 +285,11 @@ internal class Program
 
         #region Evento
         // Endpoint para adicionar evento
-        app.MapPost("/evento/adicionar", async (ConnectMataoContext context, EventoAdicionarDto eventoDto, ClaimsPrincipal user) =>
+        app.MapPost("/evento/adicionar", async (
+     ConnectMataoContext context,
+     [FromForm] EventoAdicionarDto eventoDto,
+     ClaimsPrincipal user) =>
         {
-        
-
             var evento = new Evento(
                 eventoDto.Titulo,
                 eventoDto.Descricao,
@@ -321,7 +323,10 @@ internal class Program
             }
 
             return Results.Created("Created", new BaseResponse("Evento adicionado com sucesso!"));
-        }).RequireAuthorization().WithTags("Evento");
+        })
+ .RequireAuthorization()
+ .WithTags("Evento");
+
 
         // Endpoint para remover evento
         app.MapDelete("/evento/remover/{id}", async (ConnectMataoContext context, Guid id, ClaimsPrincipal user) =>
@@ -349,6 +354,7 @@ internal class Program
         {
             var eventos = await context.Set<Evento>()
                 .Include(e => e.UsuarioParceiro)
+                 .Include(e => e.EventoImagens)
                 .Select(e => new
                 {
                     e.Id,
@@ -368,6 +374,7 @@ internal class Program
                     e.Categoriaid,
                     UsuarioNome = e.UsuarioParceiro.Nome,
                     UsuarioImagem = e.UsuarioParceiro.Imagem,
+                    EventoImagem = e.EventoImagens.Select(img => img.Imagem).ToList()
                 }).ToListAsync();
 
             return Results.Ok(eventos);
