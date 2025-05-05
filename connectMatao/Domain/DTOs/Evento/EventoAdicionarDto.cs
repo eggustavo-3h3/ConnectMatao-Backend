@@ -17,6 +17,6 @@
         public Guid UsuarioParceiroid { get; set; }
         public string Horario { get; set; } = string.Empty;
         public int FaixaEtaria { get; set; }
-        public string Imagem { get; set; } = string.Empty;
+        public List<string> Imagens { get; set; } = new();
     }
 }

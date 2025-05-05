@@ -23,7 +23,10 @@ namespace connectMatao.Domain.DTOs.Evento
         public string UsuarioNome { get; set; }
         public string UsuarioImagem { get; set; }
         public string Whatsapp { get; set; }
-        public List<EventoImagemDto> Imagens { get; set; }
+        public string[] Imagens { get; set; } = new string[0];
+        public int Likes { get; set; }
+        public int Deslikes { get; set; }
+        public int UsuarioInteragiu { get; set; }
     }
 
     public class EventoImagemDto

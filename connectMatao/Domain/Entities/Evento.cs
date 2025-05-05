@@ -19,7 +19,7 @@
         public Guid UsuarioParceiroid { get; set; }
         public Guid Categoriaid { get; set; }
         public List<EventoEstatisticas> Estatisticas { get; set; } = [];
-
+   
         #region Propriedade de Navegabilidade
 
         public virtual Usuario UsuarioParceiro { get; set; }
