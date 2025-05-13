@@ -1,6 +1,6 @@
 ﻿namespace connectMatao.Domain.DTOs.Usuario
 {
-    public class UsuarioAtualizar
+    public class UsuarioAtualizarDto
     {
         public string Nome { get; set; } = string.Empty;
         public string Login { get; set; } = string.Empty;
