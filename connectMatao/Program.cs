@@ -23,10 +23,9 @@ internal class Program
         WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
         builder.Services.AddDbContext<ConnectMataoContext>();
-
+        builder.Services.AddCors();
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddCors();
         builder.Services.AddSwaggerGen(config =>
         {
             config.SwaggerDoc("v1", new OpenApiInfo
@@ -89,6 +88,9 @@ internal class Program
             options.AddPolicy("Parceiro", policy => policy.RequireRole("Parceiro", "Admin"));
             options.AddPolicy("User",
                 policy => policy.RequireRole("User", "Admin")); // Admin também pode acessar rotas de usuário
+
+            options.AddPolicy("UsuarioAutenticado", policy =>
+       policy.RequireRole("Usuario", "Parceiro", "User", "Admin"));
         });
 
         WebApplication app = builder.Build();
@@ -109,6 +111,7 @@ internal class Program
         app.UseHttpsRedirection();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.MapControllers();
 
         #region Categoria
 
@@ -121,7 +124,7 @@ internal class Program
             }).AsEnumerable();
 
             return Results.Ok(listaCategoriaDto);
-        }).RequireAuthorization("Parceiro").WithTags("Categoria");
+        }).WithTags("Categoria");
 
         app.MapPost("categoria/adicionar", (ConnectMataoContext context, CategoriaAdicionarDto categoriaDto) =>
         {
@@ -212,6 +215,34 @@ internal class Program
             return Results.Ok(new BaseResponse("Usuário removido com sucesso!"));
         }).RequireAuthorization().WithTags("Usuário");
 
+        app.MapPut("/usuario/alterar-senha", async (
+    ConnectMataoContext context,
+    AlterarSenhaDto dto,
+    ClaimsPrincipal claims) =>
+        {
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+
+            if (!Guid.TryParse(userIdClaim, out var usuarioId))
+                return Results.Unauthorized();
+
+            var usuario = await context.UsuarioSet.FindAsync(usuarioId);
+            if (usuario == null)
+                return Results.NotFound("Usuário não encontrado.");
+
+            // Verifica se a senha atual está correta
+            if (!BCrypt.Net.BCrypt.Verify(dto.SenhaAtual, usuario.Senha))
+                return Results.BadRequest("Senha atual incorreta.");
+
+            // Atualiza com a nova senha criptografada
+            usuario.Senha = BCrypt.Net.BCrypt.HashPassword(dto.NovaSenha);
+            await context.SaveChangesAsync();
+
+            return Results.Ok(new BaseResponse("Senha alterada com sucesso!"));
+        })
+.RequireAuthorization()
+.WithTags("Usuário");
+
+
         app.MapPut("/usuario/atualizar", async (ConnectMataoContext context, UsuarioAtualizarDto usuarioAtualizarDto, ClaimsPrincipal claims) =>
         {
             var resultado = await new UsuarioAtualizarDtoValidator().ValidateAsync(usuarioAtualizarDto);
@@ -300,7 +331,7 @@ internal class Program
         .Accepts<EventoAdicionarDto>("application/json")
         .Produces<BaseResponse>(StatusCodes.Status201Created)
         .ProducesValidationProblem()
-        .RequireAuthorization()
+         .RequireAuthorization()
         .WithTags("Evento");
 
 
@@ -494,7 +525,7 @@ internal class Program
                     await context.SaveChangesAsync();
                     return Results.Ok(new BaseResponse("Like adicionado ao evento."));
                 })
-            .RequireAuthorization()
+               .RequireAuthorization("UsuarioAutenticado")
             .WithTags("Evento");
 
         // DELETE LIKE
@@ -514,7 +545,7 @@ internal class Program
                     await context.SaveChangesAsync();
                     return Results.NoContent();
                 })
-            .RequireAuthorization()
+         .RequireAuthorization("UsuarioAutenticado")
             .WithTags("Evento");
 
         // POST DESLIKE
@@ -537,7 +568,7 @@ internal class Program
                     await context.SaveChangesAsync();
                     return Results.Ok(new BaseResponse("Deslike adicionado ao evento."));
                 })
-            .RequireAuthorization()
+                .RequireAuthorization("UsuarioAutenticado")
             .WithTags("Evento");
 
         // DELETE DESLIKE
@@ -557,7 +588,7 @@ internal class Program
                     await context.SaveChangesAsync();
                     return Results.NoContent();
                 })
-            .RequireAuthorization()
+          .RequireAuthorization("UsuarioAutenticado")
             .WithTags("Evento");
 
         // GET ESTATÍSTICAS
