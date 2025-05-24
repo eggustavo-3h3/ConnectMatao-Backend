@@ -277,6 +277,51 @@ internal class Program
             return Results.Ok(new { usuario.Imagem });
         }).WithTags("Usuário");
 
+        // EndPoint para Recuperar senha  e enviar Email
+
+        app.MapPost("/usuario/recuperar-senha", (
+            RecuperarSenhaDTO dto,
+            ConnectMataoContext context) =>
+        {
+            var usuario = context.UsuarioSet
+                .FirstOrDefault(u => u.Login == dto.Login);
+
+            if (usuario == null)
+                return Results.NotFound("Usuário não encontrado.");
+
+            usuario.ChaveReset = Guid.NewGuid();
+
+            // Atualiza no banco
+            context.UsuarioSet.Update(usuario);
+            context.SaveChanges();
+
+            return Results.Ok("Chave de recuperação gerada com sucesso.");
+        });
+
+        app.MapPut("/usuario/ResetSenha/{chave}", (
+            Guid chave,
+            RedefinirSenhaDto dto,
+            ConnectMataoContext context) =>
+        {
+            var usuario = context.UsuarioSet
+                .FirstOrDefault(u => u.ChaveReset == chave);
+
+            if (usuario == null)
+                return Results.NotFound("Chave de redefinição inválida ou expirada.");
+
+            if (dto.NovaSenha != dto.ConfirmacaoSenha)
+                return Results.BadRequest("A confirmação da senha não confere.");
+
+            usuario.Senha = dto.NovaSenha;
+            usuario.ChaveReset = Guid.Empty;
+
+            context.UsuarioSet.Update(usuario);
+            context.SaveChanges();
+
+            return Results.Ok("Senha redefinida com sucesso.");
+        });
+
+
         #endregion
 
         #region Evento
