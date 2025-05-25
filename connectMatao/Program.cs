@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -9,6 +10,7 @@ using connectMatao.Domain.DTOs.Login;
 using connectMatao.Domain.DTOs.Usuario;
 using connectMatao.Domain.Entities;
 using connectMatao.Enumerator;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -215,32 +217,46 @@ internal class Program
             return Results.Ok(new BaseResponse("Usuário removido com sucesso!"));
         }).RequireAuthorization().WithTags("Usuário");
 
-        app.MapPut("/usuario/alterar-senha", async (
-    ConnectMataoContext context,
-    AlterarSenhaDto dto,
-    ClaimsPrincipal claims) =>
+        app.MapPut("/usuario/alterar-senha", (
+       ConnectMataoContext context,
+       AlterarSenhaDto dto,
+       ClaimsPrincipal claims) =>
         {
+            var validator = new AlterarSenhaDtoValidator();
+
+            var validationResult = validator.Validate(dto);
+
+            if (!validationResult.IsValid)
+            {
+                var errors = validationResult.Errors
+                    .GroupBy(e => e.PropertyName)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.Select(e => e.ErrorMessage).ToArray()
+                    );
+                return Results.BadRequest(new { errors });
+            }
+
             var userIdClaim = claims.FindFirst("Id")?.Value;
 
             if (!Guid.TryParse(userIdClaim, out var usuarioId))
                 return Results.Unauthorized();
 
-            var usuario = await context.UsuarioSet.FindAsync(usuarioId);
+            var usuario = context.UsuarioSet.Find(usuarioId);
             if (usuario == null)
                 return Results.NotFound("Usuário não encontrado.");
 
-            // Verifica se a senha atual está correta
             if (!BCrypt.Net.BCrypt.Verify(dto.SenhaAtual, usuario.Senha))
                 return Results.BadRequest("Senha atual incorreta.");
 
-            // Atualiza com a nova senha criptografada
             usuario.Senha = BCrypt.Net.BCrypt.HashPassword(dto.NovaSenha);
-            await context.SaveChangesAsync();
+            context.SaveChanges();
 
             return Results.Ok(new BaseResponse("Senha alterada com sucesso!"));
         })
-.RequireAuthorization()
-.WithTags("Usuário");
+   .RequireAuthorization()
+   .WithTags("Usuário");
+
 
 
         app.MapPut("/usuario/atualizar", async (ConnectMataoContext context, UsuarioAtualizarDto usuarioAtualizarDto, ClaimsPrincipal claims) =>
@@ -278,25 +294,22 @@ internal class Program
         }).WithTags("Usuário");
 
         // EndPoint para Recuperar senha  e enviar Email
-
-        app.MapPost("/usuario/recuperar-senha", (
-            RecuperarSenhaDTO dto,
-            ConnectMataoContext context) =>
+        app.MapPost("/usuario/recuperar-senha", (RecuperarSenhaDTO dto, ConnectMataoContext context) =>
         {
-            var usuario = context.UsuarioSet
-                .FirstOrDefault(u => u.Login == dto.Login);
+            var usuario = context.UsuarioSet.FirstOrDefault(u => u.Login == dto.Login);
 
             if (usuario == null)
+            {
                 return Results.NotFound("Usuário não encontrado.");
+            }
 
-            usuario.ChaveReset = Guid.NewGuid();
-
-            // Atualiza no banco
             context.UsuarioSet.Update(usuario);
+            usuario.ChaveReset = Guid.NewGuid();
             context.SaveChanges();
 
-            return Results.Ok("Chave de recuperação gerada com sucesso.");
+            return Results.Ok("Chave de recuperação criada.");
         });
+
 
         app.MapPut("/usuario/ResetSenha/{chave}", (
             Guid chave,
