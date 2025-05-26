@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -10,7 +9,6 @@ using connectMatao.Domain.DTOs.Usuario;
 using connectMatao.Domain.Entities;
 using connectMatao.Enumerator;
 using connectMatao.Infra.Data.Context;
-using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;

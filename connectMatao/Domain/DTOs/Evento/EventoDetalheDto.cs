@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace connectMatao.Domain.DTOs.Evento
+﻿namespace connectMatao.Domain.DTOs.Evento
 {
     public class EventoDetalheDto
     {
