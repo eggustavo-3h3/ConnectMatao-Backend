@@ -1,8 +1,8 @@
-﻿    using Microsoft.EntityFrameworkCore;
-    using connectMatao.Configurations;
-    using connectMatao.Domain.Entities;
+﻿using Microsoft.EntityFrameworkCore;
+using connectMatao.Domain.Entities;
+using connectMatao.Infra.Data.Configurations;
 
-    namespace connectMatao.Data.Context
+namespace connectMatao.Infra.Data.Context
     {
         public class ConnectMataoContext : DbContext
         {        

@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using connectMatao.Domain.Entities;
 
-namespace connectMatao.Configurations
+namespace connectMatao.Infra.Data.Configurations
 
 {
     public class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
@@ -15,6 +15,7 @@ namespace connectMatao.Configurations
             builder.Property(u => u.Senha).IsRequired().HasMaxLength(250);
             builder.Property(u => u.Imagem).IsRequired();
             builder.Property(u => u.Perfil).IsRequired();
+            builder.Property(u => u.ChaveResetSenha).IsRequired(false);
 
             builder.ToTable("TB_Usuario");
         }

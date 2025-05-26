@@ -12,8 +12,8 @@ using connectMatao.Infra.Data.Context;
 namespace connectMatao.Migrations
 {
     [DbContext(typeof(ConnectMataoContext))]
-    [Migration("20250525185759_AddChaveResetToUsuario")]
-    partial class AddChaveResetToUsuario
+    [Migration("20250526014931_ResetSenha")]
+    partial class ResetSenha
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -171,7 +171,7 @@ namespace connectMatao.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
-                    b.Property<Guid?>("ChaveReset")
+                    b.Property<Guid?>("ChaveResetSenha")
                         .HasColumnType("char(36)");
 
                     b.Property<string>("Imagem")

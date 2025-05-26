@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using connectMatao.Data.Context;
 using connectMatao.Domain.DTOs.Base;
 using connectMatao.Domain.DTOs.Categoria;
 using connectMatao.Domain.DTOs.Evento;
@@ -10,11 +9,14 @@ using connectMatao.Domain.DTOs.Login;
 using connectMatao.Domain.DTOs.Usuario;
 using connectMatao.Domain.Entities;
 using connectMatao.Enumerator;
+using connectMatao.Infra.Data.Context;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Startly.Domain.DTOs.ResetSenha;
+using Startly.Infra.Email;
 
 namespace connectMatao;
 
@@ -257,8 +259,6 @@ internal class Program
    .RequireAuthorization()
    .WithTags("Usuário");
 
-
-
         app.MapPut("/usuario/atualizar", async (ConnectMataoContext context, UsuarioAtualizarDto usuarioAtualizarDto, ClaimsPrincipal claims) =>
         {
             var resultado = await new UsuarioAtualizarDtoValidator().ValidateAsync(usuarioAtualizarDto);
@@ -292,48 +292,6 @@ internal class Program
 
             return Results.Ok(new { usuario.Imagem });
         }).WithTags("Usuário");
-
-        // EndPoint para Recuperar senha  e enviar Email
-        app.MapPost("/usuario/recuperar-senha", (RecuperarSenhaDTO dto, ConnectMataoContext context) =>
-        {
-            var usuario = context.UsuarioSet.FirstOrDefault(u => u.Login == dto.Login);
-
-            if (usuario == null)
-            {
-                return Results.NotFound("Usuário não encontrado.");
-            }
-
-            context.UsuarioSet.Update(usuario);
-            usuario.ChaveReset = Guid.NewGuid();
-            context.SaveChanges();
-
-            return Results.Ok("Chave de recuperação criada.");
-        });
-
-
-        app.MapPut("/usuario/ResetSenha/{chave}", (
-            Guid chave,
-            RedefinirSenhaDto dto,
-            ConnectMataoContext context) =>
-        {
-            var usuario = context.UsuarioSet
-                .FirstOrDefault(u => u.ChaveReset == chave);
-
-            if (usuario == null)
-                return Results.NotFound("Chave de redefinição inválida ou expirada.");
-
-            if (dto.NovaSenha != dto.ConfirmacaoSenha)
-                return Results.BadRequest("A confirmação da senha não confere.");
-
-            usuario.Senha = dto.NovaSenha;
-            usuario.ChaveReset = Guid.Empty;
-
-            context.UsuarioSet.Update(usuario);
-            context.SaveChanges();
-
-            return Results.Ok("Senha redefinida com sucesso.");
-        });
-
 
         #endregion
 
@@ -669,7 +627,7 @@ internal class Program
 
         #endregion
 
-        #region controller autenticação
+        #region Segurança
 
         app.MapPost("autenticar", async (ConnectMataoContext context, LoginDto loginDto) =>
         {
@@ -710,6 +668,70 @@ internal class Program
                 UsuarioId = usuario.Id
             });
         }).WithTags("Autenticação");
+
+        app.MapPost("gerar-chave-reset-senha", (ConnectMataoContext context, GerarResetSenhaDto gerarResetSenhaDto) =>
+        {
+            var resultado = new GerarResetSenhaDtoValidator().Validate(gerarResetSenhaDto);
+            if (!resultado.IsValid)
+                return Results.BadRequest(resultado.Errors.Select(error => error.ErrorMessage));
+
+            var usuario = context.UsuarioSet.FirstOrDefault(p => p.Login == gerarResetSenhaDto.Email);
+
+            if (usuario is not null)
+            {
+                usuario.ChaveResetSenha = Guid.NewGuid();
+                context.UsuarioSet.Update(usuario);
+                context.SaveChanges();
+
+                var emailService = new EmailService();
+                var enviarEmailResponse = emailService.EnviarEmail(gerarResetSenhaDto.Email, "Reset de Senha", $"https://url-front/reset-senha/{usuario.ChaveResetSenha}", true);
+                if (!enviarEmailResponse.Sucesso)
+                    return Results.BadRequest(new BaseResponse("Erro ao enviar o e-mail: " + enviarEmailResponse.Mensagem));
+            }
+
+            return Results.Ok(new BaseResponse("Se o e-mail informado estiver correto, você receberá as instruções por e-mail."));
+        }).WithTags("Segurança");
+
+        app.MapPut("resetar-senha", (ConnectMataoContext context, ResetSenhaDto resetSenhaDto) =>
+        {
+            var resultado = new ResetSenhaDtoValidator().Validate(resetSenhaDto);
+            if (!resultado.IsValid)
+                return Results.BadRequest(resultado.Errors.Select(error => error.ErrorMessage));
+
+            var usuario = context.UsuarioSet.FirstOrDefault(p => p.ChaveResetSenha == resetSenhaDto.ChaveResetSenha);
+
+            if (usuario is null)
+                return Results.BadRequest(new BaseResponse("Chave de reset de senha inválida."));
+
+            usuario.Senha = BCrypt.Net.BCrypt.HashPassword(resetSenhaDto.NovaSenha);
+            usuario.ChaveResetSenha = null;
+            context.UsuarioSet.Update(usuario);
+            context.SaveChanges();
+
+            return Results.Ok(new BaseResponse("Senha alterada com sucesso."));
+        }).WithTags("Segurança");
+
+        app.MapPut("alterar-senha", (ConnectMataoContext context, ClaimsPrincipal claims, AlterarSenhaDto alterarSenhaDto) =>
+        {
+            var resultado = new AlterarSenhaDtoValidator().Validate(alterarSenhaDto);
+            if (!resultado.IsValid)
+                return Results.BadRequest(resultado.Errors.Select(error => error.ErrorMessage));
+
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
+
+            var userId = Guid.Parse(userIdClaim);
+            var usuario = context.UsuarioSet.FirstOrDefault(p => p.Id == userId);
+            if (usuario == null)
+                return Results.NotFound(new BaseResponse("Usuário não encontrado."));
+
+            usuario.Senha = BCrypt.Net.BCrypt.HashPassword(alterarSenhaDto.NovaSenha);
+            context.UsuarioSet.Update(usuario);
+            context.SaveChanges();
+
+            return Results.Ok(new BaseResponse("Senha alterada com sucesso."));
+        }).WithTags("Segurança");
 
         #endregion
 

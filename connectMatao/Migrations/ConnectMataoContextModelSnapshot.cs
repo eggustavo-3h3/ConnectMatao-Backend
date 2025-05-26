@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using connectMatao.Data.Context;
+using connectMatao.Infra.Data.Context;
 
 #nullable disable
 
@@ -168,7 +168,7 @@ namespace connectMatao.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
-                    b.Property<Guid?>("ChaveReset")
+                    b.Property<Guid?>("ChaveResetSenha")
                         .HasColumnType("char(36)");
 
                     b.Property<string>("Imagem")

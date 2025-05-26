@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace connectMatao.Configurations
+namespace connectMatao.Infra.Data.Configurations
 {
     public class EventoImagensConfiguration : IEntityTypeConfiguration<EventoImagens>
     {
