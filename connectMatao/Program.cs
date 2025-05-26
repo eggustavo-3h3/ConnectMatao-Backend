@@ -667,7 +667,7 @@ internal class Program
                 Imagem = usuario.Imagem,
                 UsuarioId = usuario.Id
             });
-        }).WithTags("Autenticação");
+        }).WithTags("Segurança");
 
         app.MapPost("gerar-chave-reset-senha", (ConnectMataoContext context, GerarResetSenhaDto gerarResetSenhaDto) =>
         {
