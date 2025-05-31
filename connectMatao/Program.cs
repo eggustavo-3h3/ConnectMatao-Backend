@@ -350,28 +350,20 @@ internal class Program
 
 
         // Endpoint para remover evento
-        app.MapDelete("/evento/remover/{id}", async (ConnectMataoContext context, Guid id, ClaimsPrincipal user) =>
+        app.MapDelete("/evento/remover/{id}", (ConnectMataoContext context, Guid id) =>
         {
-            var evento = await context.Set<Evento>().FindAsync(id);
+            var evento = context.Set<Evento>().Find(id);
             if (evento == null)
-            {
                 return Results.NotFound(new BaseResponse("Evento não encontrado"));
-            }
 
-            var perfil = user.FindFirst(ClaimTypes.Role)?.Value;
+            context.Set<Evento>().Remove(evento);
+            context.SaveChanges();
 
-            if (perfil == EnumPerfil.Administrador.ToString() || (perfil == EnumPerfil.Parceiro.ToString() &&
-                                                                  evento.UsuarioParceiroid ==
-                                                                  new Guid(user.FindFirst(ClaimTypes.NameIdentifier)
-                                                                      ?.Value)))
-            {
-                context.Set<Evento>().Remove(evento);
-                await context.SaveChangesAsync();
-                return Results.Ok(new BaseResponse("Evento removido com Sucesso!"));
-            }
+            return Results.Ok(new BaseResponse("Evento removido com Sucesso!"));
+        })
+            .RequireAuthorization()
+     .WithTags("Evento");
 
-            return Results.Forbid();
-        }).RequireAuthorization().WithTags("Evento");
 
         // Endpoint para listar eventos
         app.MapGet("/evento/listar", async (ConnectMataoContext context) =>
