@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using connectMatao.Infra.Data.Context;
 
@@ -11,9 +12,11 @@ using connectMatao.Infra.Data.Context;
 namespace connectMatao.Migrations
 {
     [DbContext(typeof(ConnectMataoContext))]
-    partial class ConnectMataoContextModelSnapshot : ModelSnapshot
+    [Migration("20250531155930_addEntFormUsuarioParceiro")]
+    partial class addEntFormUsuarioParceiro
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -168,11 +171,8 @@ namespace connectMatao.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("char(36)");
 
-                    b.Property<string>("Cpf")
+                    b.Property<string>("CPF")
                         .HasColumnType("longtext");
-
-                    b.Property<DateTime>("DataEnvio")
-                        .HasColumnType("datetime(6)");
 
                     b.Property<bool>("FlagAprovado")
                         .HasColumnType("tinyint(1)");

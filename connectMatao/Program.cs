@@ -93,6 +93,8 @@ internal class Program
 
             options.AddPolicy("UsuarioAutenticado", policy =>
        policy.RequireRole("Usuario", "Parceiro", "User", "Admin"));
+
+            options.AddPolicy("Administrador", policy => policy.RequireRole("Administrador"));
         });
 
         WebApplication app = builder.Build();
@@ -157,32 +159,76 @@ internal class Program
             if (!resultado.IsValid)
                 return Results.BadRequest(resultado.Errors.Select(error => error.ErrorMessage));
 
+            var usuariosExistentes = await context.Set<Usuario>()
+                .CountAsync(u => u.Login == usuarioDto.Login);
+
+            if (usuariosExistentes >= 1)
+                return Results.BadRequest(new { mensagem = "Já existe uma conta cadastrada com este e-mail." });
+
             var usuario = new Usuario
             {
                 Id = Guid.NewGuid(),
                 Nome = usuarioDto.Nome,
                 Login = usuarioDto.Login,
-                Senha = BCrypt.Net.BCrypt.HashPassword(usuarioDto.Senha), // Hash da senha
+                Senha = BCrypt.Net.BCrypt.HashPassword(usuarioDto.Senha),
                 Imagem = usuarioDto.Imagem,
                 Perfil = usuarioDto.Perfil
             };
 
             context.Set<Usuario>().Add(usuario);
+
+            if (usuario.Perfil == EnumPerfil.Parceiro)
+            {
+                var formParceiro = new FormUsuarioParceiro
+                {
+                    Id = Guid.NewGuid(), 
+                    UsuarioId = usuario.Id,
+                    FlagAprovado = false,
+                    DataEnvio = DateTime.UtcNow
+                };
+                context.Set<FormUsuarioParceiro>().Add(formParceiro);
+            }
+
             await context.SaveChangesAsync();
 
             return Results.Created("Created", new BaseResponse("Usuário cadastrado com sucesso!"));
         }).WithTags("Usuário");
 
+        app.MapGet("/usuario/parceiro/status-cadastro", async (ConnectMataoContext context, HttpContext httpContext) =>
+        {
+            var userIdClaim = httpContext.User.Claims.FirstOrDefault(c => c.Type == "Id");
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var form = await context.Set<FormUsuarioParceiro>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(f => f.UsuarioId == userId);
+
+            if (form == null)
+            {
+                return Results.Ok(new { flagAprovado = false, formExists = false }); 
+            }
+
+            return Results.Ok(new { flagAprovado = form.FlagAprovado, formExists = true }); 
+        }).WithTags("Usuário");
+
         app.MapGet("/usuario/listar", async (ConnectMataoContext context) =>
         {
-            var usuarios = await context.Set<Usuario>().Select(u => new
-            {
-                u.Id,
-                u.Nome,
-                u.Login,
-                u.Imagem,
-                u.Perfil
-            }).ToListAsync();
+            var usuarios = await context.Set<Usuario>()
+                .Include(u => u.FormUsuarioParceiro)
+                .Select(u => new UsuarioListarComStatusParceiroDto
+                {
+                    Id = u.Id,
+                    Nome = u.Nome,
+                    Login = u.Login,
+                    Imagem = u.Imagem,
+                    Perfil = u.Perfil.ToString(),
+                    FlagAprovadoParceiro = u.FormUsuarioParceiro != null ? u.FormUsuarioParceiro.FlagAprovado : (bool?)null,
+                    FormParceiroExiste = u.FormUsuarioParceiro != null
+                })
+                .ToListAsync();
 
             return Results.Ok(usuarios);
         }).WithTags("Usuário");
@@ -290,6 +336,135 @@ internal class Program
 
             return Results.Ok(new { usuario.Imagem });
         }).WithTags("Usuário");
+
+        app.MapPut("/usuario/parceiro/completar-cadastro", ( // Rota AGORA sem {userId:guid}
+    ConnectMataoContext context,
+    FormParceiroCompletarCadastroDto formDto,
+    ClaimsPrincipal claims) =>
+        {
+            // Obter o ID do usuário logado diretamente do token
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var loggedInUserId))
+            {
+                // Se o ID do usuário não puder ser obtido do token, é um problema de autenticação/autorização
+                return Results.Unauthorized(); // Ou Results.Forbid() dependendo do contexto exato da falha
+            }
+
+            // Usamos 'loggedInUserId' diretamente para buscar o usuário
+            var usuario = context.UsuarioSet.Find(loggedInUserId);
+
+            if (usuario == null)
+            {
+                // Se, por algum motivo, o usuário do token não for encontrado no DB (improvável se a auth funciona)
+                return Results.NotFound(new BaseResponse("Usuário não encontrado."));
+            }
+
+            // Validação de perfil permanece a mesma
+            if (usuario.Perfil != EnumPerfil.Parceiro && usuario.Perfil != EnumPerfil.Administrador)
+            {
+                return Results.BadRequest(new BaseResponse("Apenas usuários com perfil de Parceiro ou Administrador podem completar este cadastro."));
+            }
+
+            var formParceiro = context.Set<FormUsuarioParceiro>()
+                                    .FirstOrDefault(f => f.UsuarioId == usuario.Id);
+
+            if (formParceiro == null)
+            {
+                formParceiro = new FormUsuarioParceiro
+                {
+                    Id = Guid.NewGuid(),
+                    UsuarioId = usuario.Id,
+                    FlagAprovado = false,
+                    NomeCompleto = formDto.NomeCompleto,
+                    Cpf = formDto.CPF, // Usando CPF (maiúsculo) da entidade com Cpf (minúsculo) do DTO
+                    Telefone = formDto.Telefone
+                };
+                context.Set<FormUsuarioParceiro>().Add(formParceiro);
+            }
+            else
+            {
+                formParceiro.NomeCompleto = formDto.NomeCompleto;
+                formParceiro.Cpf = formDto.CPF; // Usando CPF (maiúsculo) da entidade com Cpf (minúsculo) do DTO
+                formParceiro.Telefone = formDto.Telefone;
+                formParceiro.FlagAprovado = false;
+            }
+
+            context.SaveChanges();
+
+            return Results.Ok(new BaseResponse("Cadastro de parceiro enviado para aprovação com sucesso!"));
+        })
+.RequireAuthorization("Parceiro") // A autorização ainda garante que apenas Parceiros (ou Administradores se a política permitir) acessem
+.WithTags("Usuário");
+
+
+        #endregion
+
+
+        #region Formulário Parceiro (Admin)
+
+        // Endpoint for listing all pending partner forms
+        // GET /FormUsuarioParceiro/pendentes
+        app.MapGet("/FormUsuarioParceiro/pendentes", async (ConnectMataoContext context) =>
+        {
+            var pendingForms = await context.Set<FormUsuarioParceiro>()
+                .Include(f => f.Usuario) // Include User to get Nome and Login
+                .Where(f => !f.FlagAprovado)
+               .Select(f => new FormUsuarioParceiroListarDto
+               {
+                   Id = f.Id,
+                   UsuarioId = f.UsuarioId,
+                   NomeUsuario = f.Usuario != null ? f.Usuario.Nome : "N/A - Usuário Não Encontrado",
+                   LoginUsuario = f.Usuario != null ? f.Usuario.Login : "N/A - Login Não Encontrado",
+                   NomeCompleto = f.NomeCompleto,
+                   Cpf = f.Cpf,
+                   Telefone = f.Telefone,
+                   FlagAprovado = f.FlagAprovado,
+                   DataEnvio = f.DataEnvio
+               })
+                .ToListAsync();
+
+            return Results.Ok(pendingForms);
+        })
+        .RequireAuthorization("Administrador")
+        .WithTags("Formulário Parceiro (Admin)");
+
+        // Endpoint for approving a partner form
+        // PUT /FormUsuarioParceiro/aprovar/{id}
+        app.MapPut("/FormUsuarioParceiro/aprovar/{id:guid}", async (ConnectMataoContext context, Guid id) =>
+        {
+            var form = await context.Set<FormUsuarioParceiro>().FindAsync(id);
+
+            if (form == null)
+            {
+                return Results.NotFound(new BaseResponse("Solicitação de parceiro não encontrada."));
+            }
+
+            form.FlagAprovado = true;
+            await context.SaveChangesAsync();
+
+            return Results.Ok(new BaseResponse("Solicitação de parceiro aprovada com sucesso!"));
+        })
+        .RequireAuthorization("Administrador")
+        .WithTags("Formulário Parceiro (Admin)");
+
+        // Endpoint for rejecting a partner form
+        // PUT /FormUsuarioParceiro/rejeitar/{id}
+        app.MapPut("/FormUsuarioParceiro/rejeitar/{id:guid}", async (ConnectMataoContext context, Guid id) =>
+        {
+            var form = await context.Set<FormUsuarioParceiro>().FindAsync(id);
+
+            if (form == null)
+            {
+                return Results.NotFound(new BaseResponse("Solicitação de parceiro não encontrada."));
+            }
+
+            form.FlagAprovado = false;
+            await context.SaveChangesAsync();
+
+            return Results.Ok(new BaseResponse("Solicitação de parceiro rejeitada com sucesso!"));
+        })
+        .RequireAuthorization("Administrador")
+        .WithTags("Formulário Parceiro (Admin)");
 
         #endregion
 
@@ -674,7 +849,7 @@ internal class Program
                 context.SaveChanges();
 
                 var emailService = new EmailService();
-                var enviarEmailResponse = emailService.EnviarEmail(gerarResetSenhaDto.Email, "Reset de Senha", $"https://url-front/reset-senha/{usuario.ChaveResetSenha}", true);
+                var enviarEmailResponse = emailService.EnviarEmail(gerarResetSenhaDto.Email, "Reset de Senha", $"http://localhost:4200/reset-senha/{usuario.ChaveResetSenha}", true);
                 if (!enviarEmailResponse.Sucesso)
                     return Results.BadRequest(new BaseResponse("Erro ao enviar o e-mail: " + enviarEmailResponse.Mensagem));
             }

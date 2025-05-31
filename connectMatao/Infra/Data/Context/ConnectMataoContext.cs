@@ -11,7 +11,9 @@ namespace connectMatao.Infra.Data.Context
             public DbSet<Categoria> CategoriaSet { get; set; }
             public DbSet<EventoEstatisticas> EventoEstatisticaSet { get; set; }
             public DbSet<EventoImagens> EventoImagemSet { get; set; }
-            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            public DbSet<FormUsuarioParceiro> FormsUsuarioParceiro { get; set; }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
             {
                 var conexao = "Server=mysql.tccnapratica.com.br;Port=3306;Database=tccnapratica13;User=tccnapratica13;Password=Etec3h3;";
                 optionsBuilder.UseMySql(conexao, ServerVersion.AutoDetect(conexao));

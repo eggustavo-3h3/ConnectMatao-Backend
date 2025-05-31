@@ -2,8 +2,7 @@
 {
     public enum EnumPerfil
     {
-        Usuario = 1,
-        Parceiro = 2,
-        Administrador = 3
+        Parceiro = 1,
+        Administrador = 2
     }
 }
