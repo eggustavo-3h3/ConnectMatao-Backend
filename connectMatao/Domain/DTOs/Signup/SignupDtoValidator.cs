@@ -1,12 +1,10 @@
-﻿using System.Xml.XPath;
-using connectMatao.Enumerator;
-using FluentValidation;
+﻿using FluentValidation;
 
-namespace connectMatao.Domain.DTOs.Usuario
+namespace connectMatao.Domain.DTOs.Signup
 {
-    public class UsuarioAdicionarDtoValidator : AbstractValidator<UsuarioAdicionarDto>
+    public class SignupDtoValidator : AbstractValidator<SignupDto>
     {
-        public UsuarioAdicionarDtoValidator()
+        public SignupDtoValidator()
         {
             RuleFor(x => x.Nome)
                 .NotEmpty().WithMessage("Nome é obrigatório.")
@@ -24,10 +22,6 @@ namespace connectMatao.Domain.DTOs.Usuario
 
             RuleFor(x => x.ConfirmacaoSenha)
                 .Equal(x => x.Senha).WithMessage("As senhas não coincidem.");
-
-            RuleFor(x => x.Perfil)
-                .Equal(EnumPerfil.Administrador)
-                .WithMessage("O perfil não deve ser 'Administrador'.");
         }
     }
 }

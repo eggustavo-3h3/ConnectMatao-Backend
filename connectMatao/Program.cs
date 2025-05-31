@@ -5,6 +5,7 @@ using connectMatao.Domain.DTOs.Base;
 using connectMatao.Domain.DTOs.Categoria;
 using connectMatao.Domain.DTOs.Evento;
 using connectMatao.Domain.DTOs.Login;
+using connectMatao.Domain.DTOs.Signup;
 using connectMatao.Domain.DTOs.Usuario;
 using connectMatao.Domain.Entities;
 using connectMatao.Enumerator;
@@ -782,6 +783,32 @@ internal class Program
             context.SaveChanges();
 
             return Results.Ok(new BaseResponse("Senha alterada com sucesso."));
+        }).WithTags("Segurança");
+
+        app.MapPost("signup", (ConnectMataoContext context, SignupDto signupDto) =>
+        {
+            var resultado = new SignupDtoValidator().Validate(signupDto);
+            if (!resultado.IsValid)
+                return Results.BadRequest(resultado.Errors.Select(error => error.ErrorMessage));
+
+            var usuario = context.UsuarioSet.FirstOrDefault(u => u.Perfil == EnumPerfil.Administrador);
+            if (usuario is not null)
+                return Results.BadRequest(new BaseResponse("Já existe um usuário administrador cadastrado."));
+
+            usuario = new Usuario
+            {
+                Id = Guid.NewGuid(),
+                Nome = signupDto.Nome,
+                Login = signupDto.Login,
+                Senha = BCrypt.Net.BCrypt.HashPassword(signupDto.Senha),
+                Imagem = string.Empty,
+                Perfil = EnumPerfil.Administrador
+            };
+
+            context.UsuarioSet.Add(usuario);
+            context.SaveChanges();
+
+            return Results.Created("Created", new BaseResponse("Usuário Administrador cadastrado com sucesso!"));
         }).WithTags("Segurança");
 
         #endregion
