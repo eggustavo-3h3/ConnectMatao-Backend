@@ -86,14 +86,8 @@ internal class Program
 
         builder.Services.AddAuthorization(options =>
         {
-            options.AddPolicy("Usuario", policy => policy.RequireRole("Usuario", "Admin"));
-            options.AddPolicy("Parceiro", policy => policy.RequireRole("Parceiro", "Admin"));
-            options.AddPolicy("User",
-                policy => policy.RequireRole("User", "Admin")); // Admin também pode acessar rotas de usuário
-
-            options.AddPolicy("UsuarioAutenticado", policy =>
-       policy.RequireRole("Usuario", "Parceiro", "User", "Admin"));
-
+            options.AddPolicy("Usuario", policy => policy.RequireRole("Usuario", "Administrador"));
+            options.AddPolicy("Parceiro", policy => policy.RequireRole("Parceiro", "Administrador"));
             options.AddPolicy("Administrador", policy => policy.RequireRole("Administrador"));
         });
 
@@ -375,7 +369,6 @@ internal class Program
 
         #region Evento
 
-        // Endpoint para adicionar evento
         app.MapPost("/evento/adicionar", (ConnectMataoContext context, EventoAdicionarDto eventoAdicionarDto) =>
         {
             var resultado = new EventoAdicionarDtoValidator().Validate(eventoAdicionarDto);
@@ -421,15 +414,12 @@ internal class Program
 
             context.SaveChanges();
             return Results.Created("Created", new BaseResponse("Evento adicionado com sucesso!"));
-        })
-        .Accepts<EventoAdicionarDto>("application/json")
-        .Produces<BaseResponse>(StatusCodes.Status201Created)
-        .ProducesValidationProblem()
-         .RequireAuthorization()
-        .WithTags("Evento");
+        }).Accepts<EventoAdicionarDto>("application/json")
+            .Produces<BaseResponse>(StatusCodes.Status201Created)
+            .ProducesValidationProblem()
+            .RequireAuthorization()
+            .WithTags("Evento");
 
-
-        // Endpoint para remover evento
         app.MapDelete("/evento/remover/{id}", (ConnectMataoContext context, Guid id) =>
         {
             var evento = context.Set<Evento>().Find(id);
@@ -440,12 +430,8 @@ internal class Program
             context.SaveChanges();
 
             return Results.Ok(new BaseResponse("Evento removido com Sucesso!"));
-        })
-            .RequireAuthorization()
-     .WithTags("Evento");
+        }).RequireAuthorization().WithTags("Evento");
 
-
-        // Endpoint para listar eventos
         app.MapGet("/evento/listar", async (ConnectMataoContext context) =>
         {
             var eventos = await context.Set<Evento>()
@@ -476,7 +462,6 @@ internal class Program
             return Results.Ok(eventos);
         }).WithTags("Evento");
 
-        // Endpoint para listar eventos de um usuário específico
         app.MapGet("/evento/listar/usuario/{usuarioId:guid}", async (ConnectMataoContext context, Guid usuarioId) =>
         {
             var eventosDoUsuario = await context.Set<Evento>()
@@ -508,7 +493,6 @@ internal class Program
             return Results.Ok(eventosDoUsuario);
         }).WithTags("Evento");
 
-
         app.MapGet("evento/{eventoId:guid}/imagens", async (Guid eventoId, ConnectMataoContext context) =>
         {
             var imagens = await context.EventoImagemSet
@@ -529,171 +513,168 @@ internal class Program
             return Results.Ok(imagens);
         }).WithTags("Evento");
 
-        app.MapGet("/evento/{id:guid}/detalhe",
-                async (Guid id, ConnectMataoContext context, ClaimsPrincipal user) =>
-                {
-                    var evento = await context.Set<Evento>()
-                        .Include(e => e.UsuarioParceiro)
-                        .Include(e => e.EventoImagens)
-                        .FirstOrDefaultAsync(e => e.Id == id);
+        app.MapGet("/evento/{id:guid}/detalhe", async (Guid id, ConnectMataoContext context, ClaimsPrincipal user) =>
+        {
+            var evento = await context.Set<Evento>()
+                .Include(e => e.UsuarioParceiro)
+                .Include(e => e.EventoImagens)
+                .FirstOrDefaultAsync(e => e.Id == id);
 
-                    if (evento == null)
-                        return Results.NotFound(new BaseResponse("Evento não encontrado."));
+            if (evento == null)
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
 
-                    // Estatísticas agregadas
-                    var stats = await context.EventoEstatisticaSet
-                        .Where(es => es.Eventoid == id)
-                        .GroupBy(es => es.TipoEstatistica)
-                        .Select(g => new { Tipo = g.Key, Qt = g.Count() })
-                        .ToListAsync();
+            // Estatísticas agregadas
+            var stats = await context.EventoEstatisticaSet
+                .Where(es => es.Eventoid == id)
+                .GroupBy(es => es.TipoEstatistica)
+                .Select(g => new { Tipo = g.Key, Qt = g.Count() })
+                .ToListAsync();
 
-                    var likes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Like)?.Qt ?? 0;
-                    var deslikes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Deslike)?.Qt ?? 0;
+            var likes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Like)?.Qt ?? 0;
+            var deslikes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Deslike)?.Qt ?? 0;
 
-                    // Interação do usuário atual
-                    var usuarioInteragiu = 0;
-                    var uidClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    if (Guid.TryParse(uidClaim, out var uid))
-                    {
-                        usuarioInteragiu = await context.EventoEstatisticaSet
-                            .Where(es => es.Eventoid == id && es.Usuarioid == uid)
-                            .Select(es => (int)es.TipoEstatistica)
-                            .FirstOrDefaultAsync();
-                    }
-
-                    var dto = new EventoDetalheDto
-                    {
-                        Id = evento.Id,
-                        Titulo = evento.Titulo,
-                        Descricao = evento.Descricao,
-                        Cep = evento.Cep,
-                        Logradouro = evento.Logradouro,
-                        Numero = evento.Numero,
-                        Bairro = evento.Bairro,
-                        Telefone = evento.Telefone,
-                        Email = evento.Email,
-                        Data = evento.Data,
-                        Horario = evento.Horario,
-                        FaixaEtaria = evento.FaixaEtaria,
-                        FlagAprovado = evento.FlagAprovado,
-                        UsuarioParceiroid = evento.UsuarioParceiroid,
-                        Categoriaid = evento.Categoriaid,
-                        UsuarioNome = evento.UsuarioParceiro.Nome,
-                        Whatsapp = evento.Whatsapp,
-                        Imagens = evento.EventoImagens.Select(img => img.Imagem).ToArray(), // Alteração aqui
-                        Likes = likes,
-                        Deslikes = deslikes,
-                        UsuarioInteragiu = usuarioInteragiu
-                    };
-
-                    return Results.Ok(dto);
-                })
-            .WithTags("Evento");
-
-
-        // POST LIKE
-        app.MapPost("/eventos/{eventoId:guid}/likes",
-                async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
-                {
-                    var uClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    if (!Guid.TryParse(uClaim, out var uid)) return Results.Unauthorized();
-
-                    var evt = await context.Set<Evento>().FindAsync(eventoId);
-                    if (evt == null) return Results.NotFound(new BaseResponse("Evento não encontrado."));
-
-                    context.EventoEstatisticaSet.Add(new EventoEstatisticas
-                    {
-                        Id = Guid.NewGuid(),
-                        Eventoid = eventoId,
-                        Usuarioid = uid,
-                        TipoEstatistica = EnumTipoEstatistica.Like
-                    });
-                    await context.SaveChangesAsync();
-                    return Results.Ok(new BaseResponse("Like adicionado ao evento."));
-                })
-               .RequireAuthorization("UsuarioAutenticado")
-            .WithTags("Evento");
-
-        // DELETE LIKE
-        app.MapDelete("/eventos/{eventoId:guid}/likes",
-                async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
-                {
-                    var uClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    if (!Guid.TryParse(uClaim, out var uid)) return Results.Unauthorized();
-
-                    var stat = await context.EventoEstatisticaSet
-                        .FirstOrDefaultAsync(es => es.Eventoid == eventoId
-                                                   && es.Usuarioid == uid
-                                                   && es.TipoEstatistica == EnumTipoEstatistica.Like);
-                    if (stat == null) return Results.NotFound();
-
-                    context.EventoEstatisticaSet.Remove(stat);
-                    await context.SaveChangesAsync();
-                    return Results.NoContent();
-                })
-         .RequireAuthorization("UsuarioAutenticado")
-            .WithTags("Evento");
-
-        // POST DESLIKE
-        app.MapPost("/eventos/{eventoId:guid}/deslikes",
-                async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
-                {
-                    var uClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    if (!Guid.TryParse(uClaim, out var uid)) return Results.Unauthorized();
-
-                    var evt = await context.Set<Evento>().FindAsync(eventoId);
-                    if (evt == null) return Results.NotFound(new BaseResponse("Evento não encontrado."));
-
-                    context.EventoEstatisticaSet.Add(new EventoEstatisticas
-                    {
-                        Id = Guid.NewGuid(),
-                        Eventoid = eventoId,
-                        Usuarioid = uid,
-                        TipoEstatistica = EnumTipoEstatistica.Deslike
-                    });
-                    await context.SaveChangesAsync();
-                    return Results.Ok(new BaseResponse("Deslike adicionado ao evento."));
-                })
-                .RequireAuthorization("UsuarioAutenticado")
-            .WithTags("Evento");
-
-        // DELETE DESLIKE
-        app.MapDelete("/eventos/{eventoId:guid}/deslikes",
-                async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal user) =>
-                {
-                    var uClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    if (!Guid.TryParse(uClaim, out var uid)) return Results.Unauthorized();
-
-                    var stat = await context.EventoEstatisticaSet
-                        .FirstOrDefaultAsync(es => es.Eventoid == eventoId
-                                                   && es.Usuarioid == uid
-                                                   && es.TipoEstatistica == EnumTipoEstatistica.Deslike);
-                    if (stat == null) return Results.NotFound();
-
-                    context.EventoEstatisticaSet.Remove(stat);
-                    await context.SaveChangesAsync();
-                    return Results.NoContent();
-                })
-          .RequireAuthorization("UsuarioAutenticado")
-            .WithTags("Evento");
-
-        // GET ESTATÍSTICAS
-        app.MapGet("/eventos/{eventoId:guid}/estatisticas", async (Guid eventoId, ConnectMataoContext context) =>
+            // Interação do usuário atual
+            var usuarioInteragiu = 0;
+            var uidClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (Guid.TryParse(uidClaim, out var uid))
             {
-                var stats = await context.EventoEstatisticaSet
-                    .Where(es => es.Eventoid == eventoId)
-                    .GroupBy(es => es.TipoEstatistica)
-                    .Select(g => new { Tipo = g.Key, Qt = g.Count() })
-                    .ToListAsync();
+                usuarioInteragiu = await context.EventoEstatisticaSet
+                    .Where(es => es.Eventoid == id && es.Usuarioid == uid)
+                    .Select(es => (int)es.TipoEstatistica)
+                    .FirstOrDefaultAsync();
+            }
 
-                var res = new
-                {
-                    likes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Like)?.Qt ?? 0,
-                    deslikes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Deslike)?.Qt ?? 0
-                };
-                return Results.Ok(res);
-            })
-            .WithTags("Evento");
+            var dto = new EventoDetalheDto
+            {
+                Id = evento.Id,
+                Titulo = evento.Titulo,
+                Descricao = evento.Descricao,
+                Cep = evento.Cep,
+                Logradouro = evento.Logradouro,
+                Numero = evento.Numero,
+                Bairro = evento.Bairro,
+                Telefone = evento.Telefone,
+                Email = evento.Email,
+                Data = evento.Data,
+                Horario = evento.Horario,
+                FaixaEtaria = evento.FaixaEtaria,
+                FlagAprovado = evento.FlagAprovado,
+                UsuarioParceiroid = evento.UsuarioParceiroid,
+                Categoriaid = evento.Categoriaid,
+                UsuarioNome = evento.UsuarioParceiro.Nome,
+                Whatsapp = evento.Whatsapp,
+                Imagens = evento.EventoImagens.Select(img => img.Imagem).ToArray(), // Alteração aqui
+                Likes = likes,
+                Deslikes = deslikes,
+                UsuarioInteragiu = usuarioInteragiu
+            };
+
+            return Results.Ok(dto);
+        }).WithTags("Evento");
+
+        app.MapPost("/eventos/{eventoId:guid}/likes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
+        {
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
+
+            var userId = Guid.Parse(userIdClaim);
+
+            var evt = await context.EventoSet.FindAsync(eventoId);
+            if (evt == null) 
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
+
+            context.EventoEstatisticaSet.Add(new EventoEstatisticas
+            {
+                Id = Guid.NewGuid(),
+                Eventoid = eventoId,
+                Usuarioid = userId,
+                TipoEstatistica = EnumTipoEstatistica.Like
+            });
+            await context.SaveChangesAsync();
+            return Results.Ok(new BaseResponse("Like adicionado ao evento."));
+        }).RequireAuthorization().WithTags("Evento");
+
+        app.MapDelete("/eventos/{eventoId:guid}/likes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
+        {
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
+
+            var userId = Guid.Parse(userIdClaim);
+
+            var stat = await context.EventoEstatisticaSet
+                .FirstOrDefaultAsync(es => es.Eventoid == eventoId
+                                           && es.Usuarioid == userId
+                                           && es.TipoEstatistica == EnumTipoEstatistica.Like);
+            if (stat == null) 
+                return Results.NotFound();
+
+            context.EventoEstatisticaSet.Remove(stat);
+            await context.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization().WithTags("Evento");
+
+        app.MapPost("/eventos/{eventoId:guid}/deslikes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
+        {
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
+
+            var userId = Guid.Parse(userIdClaim);
+
+            var evt = await context.EventoSet.FindAsync(eventoId);
+            if (evt == null) 
+                return Results.NotFound(new BaseResponse("Evento não encontrado."));
+            
+            context.EventoEstatisticaSet.Add(new EventoEstatisticas
+            {
+                Id = Guid.NewGuid(),
+                Eventoid = eventoId,
+                Usuarioid = userId,
+                TipoEstatistica = EnumTipoEstatistica.Deslike
+            });
+
+            await context.SaveChangesAsync();
+            return Results.Ok(new BaseResponse("Deslike adicionado ao evento."));
+        }).RequireAuthorization("UsuarioAutenticado").WithTags("Evento");
+
+        app.MapDelete("/eventos/{eventoId:guid}/deslikes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
+        {
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
+
+            var userId = Guid.Parse(userIdClaim);
+
+            var stat = await context.EventoEstatisticaSet
+                .FirstOrDefaultAsync(es => es.Eventoid == eventoId
+                                           && es.Usuarioid == userId
+                                           && es.TipoEstatistica == EnumTipoEstatistica.Deslike);
+            
+            if (stat == null) 
+                return Results.NotFound();
+
+            context.EventoEstatisticaSet.Remove(stat);
+            await context.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization("UsuarioAutenticado").WithTags("Evento");
+
+        app.MapGet("/eventos/{eventoId:guid}/estatisticas", async (Guid eventoId, ConnectMataoContext context) =>
+        {
+            var stats = await context.EventoEstatisticaSet
+                .Where(es => es.Eventoid == eventoId)
+                .GroupBy(es => es.TipoEstatistica)
+                .Select(g => new { Tipo = g.Key, Qt = g.Count() })
+                .ToListAsync();
+
+            var res = new
+            {
+                likes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Like)?.Qt ?? 0,
+                deslikes = stats.FirstOrDefault(s => s.Tipo == EnumTipoEstatistica.Deslike)?.Qt ?? 0
+            };
+            return Results.Ok(res);
+        }).WithTags("Evento");
 
         #endregion
 
