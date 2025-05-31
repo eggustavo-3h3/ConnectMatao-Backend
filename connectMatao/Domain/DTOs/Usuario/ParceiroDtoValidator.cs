@@ -3,15 +3,15 @@ using System.Text.RegularExpressions;
 
 namespace connectMatao.Domain.DTOs.Usuario
 {
-    public class FormParceiroCompletarCadastroDtoValidator : AbstractValidator<FormParceiroCompletarCadastroDto>
+    public class ParceiroDtoValidator : AbstractValidator<ParceiroDto>
     {
-        public FormParceiroCompletarCadastroDtoValidator()
+        public ParceiroDtoValidator()
         {
             RuleFor(x => x.NomeCompleto)
                 .NotEmpty().WithMessage("O nome completo é obrigatório.")
-                .MaximumLength(100).WithMessage("O nome completo não pode exceder 100 caracteres.");
+                .MaximumLength(150).WithMessage("O nome completo não pode exceder 150 caracteres.");
 
-            RuleFor(x => x.CPF)
+            RuleFor(x => x.Cpf)
                 .NotEmpty().WithMessage("O CPF é obrigatório.")
                 .Length(11).WithMessage("O CPF deve conter 11 dígitos numéricos.") // Garante que tem 11 dígitos
                 .Must(BeAValidCpf).WithMessage("CPF inválido."); // Chama a função de validação de CPF

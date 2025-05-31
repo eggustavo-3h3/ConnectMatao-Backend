@@ -11,7 +11,7 @@ namespace connectMatao.Infra.Data.Context
             public DbSet<Categoria> CategoriaSet { get; set; }
             public DbSet<EventoEstatisticas> EventoEstatisticaSet { get; set; }
             public DbSet<EventoImagens> EventoImagemSet { get; set; }
-            public DbSet<FormUsuarioParceiro> FormsUsuarioParceiro { get; set; }
+            public DbSet<Parceiro> ParceiroSet { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
             {
@@ -27,8 +27,9 @@ namespace connectMatao.Infra.Data.Context
                 modelBuilder.ApplyConfiguration(new EventoEstatisticasConfiguration());
                 modelBuilder.ApplyConfiguration(new EventoImagensConfiguration());
                 modelBuilder.ApplyConfiguration(new UsuarioConfiguration());
+                modelBuilder.ApplyConfiguration(new ParceiroConfiguration());
 
-                base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(modelBuilder);
             }
         }
     }

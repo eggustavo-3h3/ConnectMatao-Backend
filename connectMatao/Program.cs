@@ -177,58 +177,22 @@ internal class Program
 
             context.Set<Usuario>().Add(usuario);
 
-            if (usuario.Perfil == EnumPerfil.Parceiro)
-            {
-                var formParceiro = new FormUsuarioParceiro
-                {
-                    Id = Guid.NewGuid(), 
-                    UsuarioId = usuario.Id,
-                    FlagAprovado = false,
-                    DataEnvio = DateTime.UtcNow
-                };
-                context.Set<FormUsuarioParceiro>().Add(formParceiro);
-            }
-
             await context.SaveChangesAsync();
 
             return Results.Created("Created", new BaseResponse("Usuário cadastrado com sucesso!"));
         }).WithTags("Usuário");
 
-        app.MapGet("/usuario/parceiro/status-cadastro", async (ConnectMataoContext context, HttpContext httpContext) =>
-        {
-            var userIdClaim = httpContext.User.Claims.FirstOrDefault(c => c.Type == "Id");
-            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
-            {
-                return Results.Unauthorized();
-            }
-
-            var form = await context.Set<FormUsuarioParceiro>()
-                .AsNoTracking()
-                .FirstOrDefaultAsync(f => f.UsuarioId == userId);
-
-            if (form == null)
-            {
-                return Results.Ok(new { flagAprovado = false, formExists = false }); 
-            }
-
-            return Results.Ok(new { flagAprovado = form.FlagAprovado, formExists = true }); 
-        }).WithTags("Usuário");
-
         app.MapGet("/usuario/listar", async (ConnectMataoContext context) =>
         {
             var usuarios = await context.Set<Usuario>()
-                .Include(u => u.FormUsuarioParceiro)
                 .Select(u => new UsuarioListarComStatusParceiroDto
                 {
                     Id = u.Id,
                     Nome = u.Nome,
                     Login = u.Login,
                     Imagem = u.Imagem,
-                    Perfil = u.Perfil.ToString(),
-                    FlagAprovadoParceiro = u.FormUsuarioParceiro != null ? u.FormUsuarioParceiro.FlagAprovado : (bool?)null,
-                    FormParceiroExiste = u.FormUsuarioParceiro != null
-                })
-                .ToListAsync();
+                    Perfil = u.Perfil.ToString()
+                }).ToListAsync();
 
             return Results.Ok(usuarios);
         }).WithTags("Usuário");
@@ -250,7 +214,7 @@ internal class Program
             });
         }).WithTags("Usuário");
 
-        app.MapDelete("/usuario/{id}", async (ConnectMataoContext context, Guid id) =>
+        app.MapDelete("/usuario/{id:guid}", async (ConnectMataoContext context, Guid id) =>
         {
             var usuario = await context.Set<Usuario>().FindAsync(id);
 
@@ -263,10 +227,7 @@ internal class Program
             return Results.Ok(new BaseResponse("Usuário removido com sucesso!"));
         }).RequireAuthorization().WithTags("Usuário");
 
-        app.MapPut("/usuario/alterar-senha", (
-       ConnectMataoContext context,
-       AlterarSenhaDto dto,
-       ClaimsPrincipal claims) =>
+        app.MapPut("/usuario/alterar-senha", (ConnectMataoContext context, AlterarSenhaDto dto, ClaimsPrincipal claims) =>
         {
             var validator = new AlterarSenhaDtoValidator();
 
@@ -337,134 +298,78 @@ internal class Program
             return Results.Ok(new { usuario.Imagem });
         }).WithTags("Usuário");
 
-        app.MapPut("/usuario/parceiro/completar-cadastro", ( // Rota AGORA sem {userId:guid}
-    ConnectMataoContext context,
-    FormParceiroCompletarCadastroDto formDto,
-    ClaimsPrincipal claims) =>
-        {
-            // Obter o ID do usuário logado diretamente do token
-            var userIdClaim = claims.FindFirst("Id")?.Value;
-            if (userIdClaim == null || !Guid.TryParse(userIdClaim, out var loggedInUserId))
-            {
-                // Se o ID do usuário não puder ser obtido do token, é um problema de autenticação/autorização
-                return Results.Unauthorized(); // Ou Results.Forbid() dependendo do contexto exato da falha
-            }
-
-            // Usamos 'loggedInUserId' diretamente para buscar o usuário
-            var usuario = context.UsuarioSet.Find(loggedInUserId);
-
-            if (usuario == null)
-            {
-                // Se, por algum motivo, o usuário do token não for encontrado no DB (improvável se a auth funciona)
-                return Results.NotFound(new BaseResponse("Usuário não encontrado."));
-            }
-
-            // Validação de perfil permanece a mesma
-            if (usuario.Perfil != EnumPerfil.Parceiro && usuario.Perfil != EnumPerfil.Administrador)
-            {
-                return Results.BadRequest(new BaseResponse("Apenas usuários com perfil de Parceiro ou Administrador podem completar este cadastro."));
-            }
-
-            var formParceiro = context.Set<FormUsuarioParceiro>()
-                                    .FirstOrDefault(f => f.UsuarioId == usuario.Id);
-
-            if (formParceiro == null)
-            {
-                formParceiro = new FormUsuarioParceiro
-                {
-                    Id = Guid.NewGuid(),
-                    UsuarioId = usuario.Id,
-                    FlagAprovado = false,
-                    NomeCompleto = formDto.NomeCompleto,
-                    Cpf = formDto.CPF, // Usando CPF (maiúsculo) da entidade com Cpf (minúsculo) do DTO
-                    Telefone = formDto.Telefone
-                };
-                context.Set<FormUsuarioParceiro>().Add(formParceiro);
-            }
-            else
-            {
-                formParceiro.NomeCompleto = formDto.NomeCompleto;
-                formParceiro.Cpf = formDto.CPF; // Usando CPF (maiúsculo) da entidade com Cpf (minúsculo) do DTO
-                formParceiro.Telefone = formDto.Telefone;
-                formParceiro.FlagAprovado = false;
-            }
-
-            context.SaveChanges();
-
-            return Results.Ok(new BaseResponse("Cadastro de parceiro enviado para aprovação com sucesso!"));
-        })
-.RequireAuthorization("Parceiro") // A autorização ainda garante que apenas Parceiros (ou Administradores se a política permitir) acessem
-.WithTags("Usuário");
-
-
         #endregion
 
+        #region Parceiro
 
-        #region Formulário Parceiro (Admin)
-
-        // Endpoint for listing all pending partner forms
-        // GET /FormUsuarioParceiro/pendentes
-        app.MapGet("/FormUsuarioParceiro/pendentes", async (ConnectMataoContext context) =>
+        app.MapGet("/parceiro/status-cadastro", async (ConnectMataoContext context, ClaimsPrincipal claims) =>
         {
-            var pendingForms = await context.Set<FormUsuarioParceiro>()
-                .Include(f => f.Usuario) // Include User to get Nome and Login
-                .Where(f => !f.FlagAprovado)
-               .Select(f => new FormUsuarioParceiroListarDto
-               {
-                   Id = f.Id,
-                   UsuarioId = f.UsuarioId,
-                   NomeUsuario = f.Usuario != null ? f.Usuario.Nome : "N/A - Usuário Não Encontrado",
-                   LoginUsuario = f.Usuario != null ? f.Usuario.Login : "N/A - Login Não Encontrado",
-                   NomeCompleto = f.NomeCompleto,
-                   Cpf = f.Cpf,
-                   Telefone = f.Telefone,
-                   FlagAprovado = f.FlagAprovado,
-                   DataEnvio = f.DataEnvio
-               })
-                .ToListAsync();
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
 
-            return Results.Ok(pendingForms);
-        })
-        .RequireAuthorization("Administrador")
-        .WithTags("Formulário Parceiro (Admin)");
+            var userId = Guid.Parse(userIdClaim);
 
-        // Endpoint for approving a partner form
-        // PUT /FormUsuarioParceiro/aprovar/{id}
-        app.MapPut("/FormUsuarioParceiro/aprovar/{id:guid}", async (ConnectMataoContext context, Guid id) =>
+            var parceiro = await context.ParceiroSet.FirstOrDefaultAsync(p => p.UsuarioId == userId);
+            
+            return parceiro == null
+                ? Results.Ok(new { flagAprovado = false })
+                : Results.Ok(new { flagAprovado = parceiro.FlagAprovado });
+        }).WithTags("Parceiro");
+
+        app.MapPut("/parceiro/completar-cadastro", (ConnectMataoContext context, ParceiroDto parceiroDto, ClaimsPrincipal claims) =>
         {
-            var form = await context.Set<FormUsuarioParceiro>().FindAsync(id);
+            var userIdClaim = claims.FindFirst("Id")?.Value;
+            if (userIdClaim == null)
+                return Results.Unauthorized();
 
-            if (form == null)
+            var userId = Guid.Parse(userIdClaim);
+
+            var usuario = context.UsuarioSet.Find(userId);
+
+            if (usuario == null)
+                return Results.NotFound(new BaseResponse("Usuário não encontrado."));
+
+            // Validação de perfil permanece a mesma
+            if (usuario.Perfil != EnumPerfil.Parceiro)
+                return Results.BadRequest(new BaseResponse("Apenas usuários com perfil de Parceiro podem completar este cadastro."));
+
+            var parceiro = new Parceiro
             {
-                return Results.NotFound(new BaseResponse("Solicitação de parceiro não encontrada."));
-            }
+                Id = Guid.NewGuid(),
+                UsuarioId = userId,
+                NomeCompleto = parceiroDto.NomeCompleto,
+                Cpf = parceiroDto.Cpf,
+                Telefone = parceiroDto.Telefone,
+                FlagAprovado = false, // Inicialmente não aprovado
+                DataEnvio = DateTime.UtcNow // Define a data de envio como agora
+            };
+            
+            context.SaveChanges();
+            return Results.Ok(new BaseResponse("Cadastro de parceiro enviado para aprovação com sucesso!"));
+        }).RequireAuthorization("Parceiro").WithTags("Parcerio");
 
-            form.FlagAprovado = true;
-            await context.SaveChangesAsync();
-
-            return Results.Ok(new BaseResponse("Solicitação de parceiro aprovada com sucesso!"));
-        })
-        .RequireAuthorization("Administrador")
-        .WithTags("Formulário Parceiro (Admin)");
-
-        // Endpoint for rejecting a partner form
-        // PUT /FormUsuarioParceiro/rejeitar/{id}
-        app.MapPut("/FormUsuarioParceiro/rejeitar/{id:guid}", async (ConnectMataoContext context, Guid id) =>
+        app.MapPut("/parceiro/aprovar/{id:guid}", (ConnectMataoContext context, Guid id) =>
         {
-            var form = await context.Set<FormUsuarioParceiro>().FindAsync(id);
+            var parceiro = context.ParceiroSet.Find(id);
+            if (parceiro == null)
+                return Results.NotFound(new BaseResponse("Parceiro não encontrado."));
 
-            if (form == null)
-            {
-                return Results.NotFound(new BaseResponse("Solicitação de parceiro não encontrada."));
-            }
+            parceiro.FlagAprovado = true;
+            context.SaveChanges();
+            return Results.Ok(new BaseResponse("Cadastro de parceiro aprovado com sucesso!"));
+        }).RequireAuthorization("Administrador").WithTags("Parceiro");
 
-            form.FlagAprovado = false;
-            await context.SaveChangesAsync();
+        app.MapPut("/parceiro/reprovar/{id:guid}", (ConnectMataoContext context, Guid id) =>
+        {
+            var parceiro = context.ParceiroSet.Find(id);
+            if (parceiro == null)
+                return Results.NotFound(new BaseResponse("Parceiro não encontrado."));
 
-            return Results.Ok(new BaseResponse("Solicitação de parceiro rejeitada com sucesso!"));
-        })
-        .RequireAuthorization("Administrador")
-        .WithTags("Formulário Parceiro (Admin)");
+            parceiro.FlagAprovado = false;
+            context.SaveChanges();
+            return Results.Ok(new BaseResponse("Cadastro de parceiro reprovado com sucesso!"));
+        }).RequireAuthorization("Administrador").WithTags("Parceiro");
 
         #endregion
 

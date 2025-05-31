@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using connectMatao.Infra.Data.Context;
 
@@ -11,9 +12,11 @@ using connectMatao.Infra.Data.Context;
 namespace connectMatao.Migrations
 {
     [DbContext(typeof(ConnectMataoContext))]
-    partial class ConnectMataoContextModelSnapshot : ModelSnapshot
+    [Migration("20250531193207_AdicionadoParceiro")]
+    partial class AdicionadoParceiro
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -11,6 +11,5 @@ namespace connectMatao.Domain.Entities
         public string Imagem { get; set; } = string.Empty;
         public Guid? ChaveResetSenha { get; set; }
         public EnumPerfil Perfil { get; set; }
-        public FormUsuarioParceiro? FormUsuarioParceiro { get; set; }
     }
 }
