@@ -16,7 +16,7 @@
         public bool FlagAprovado { get; set; }
         public Guid UsuarioParceiroid { get; set; }
         public string Horario { get; set; } = string.Empty;
-        public int FaixaEtaria { get; set; }
+        public string FaixaEtaria { get; set; }
         public List<string> Imagens { get; set; } = new();
     }
 }

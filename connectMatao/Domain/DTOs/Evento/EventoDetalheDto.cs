@@ -13,7 +13,7 @@
         public string Email { get; set; }
         public DateTime Data { get; set; }
         public string Horario { get; set; }
-        public int FaixaEtaria { get; set; }
+        public string FaixaEtaria { get; set; }
         public bool FlagAprovado { get; set; }
         public Guid UsuarioParceiroid { get; set; }
         public Guid Categoriaid { get; set; }

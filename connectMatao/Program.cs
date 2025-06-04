@@ -143,6 +143,20 @@ internal class Program
             return Results.Created("Created", new BaseResponse("Categoria Registrada com Sucesso!"));
         }).RequireAuthorization("Parceiro").WithTags("Categoria");
 
+        app.MapDelete("categoria/excluir/{id}", (ConnectMataoContext context, Guid id) =>
+        {
+            var categoria = context.CategoriaSet.FirstOrDefault(c => c.Id == id);
+
+            if (categoria == null)
+            {
+                return Results.NotFound(new BaseResponse("Categoria não encontrada."));
+            }
+
+            context.CategoriaSet.Remove(categoria);
+            context.SaveChanges();
+
+            return Results.Ok(new BaseResponse("Categoria excluída com sucesso!"));
+        }).RequireAuthorization("Parceiro").WithTags("Categoria");
         #endregion
 
         #region Usuario
@@ -297,6 +311,30 @@ internal class Program
 
         #region Parceiro
 
+        app.MapGet("/parceiro/pendentes", async (ConnectMataoContext context) =>
+        {
+            var parceirosPendentes = await context.ParceiroSet
+                .Include(p => p.Usuario)
+                .Where(p => p.FlagAprovado == false && p.DataEnvio != DateTime.MinValue)
+                .Select(p => new FormUsuarioParceiroListarDto
+                {
+                    Id = p.Id,
+                    UsuarioId = p.UsuarioId,
+                    NomeCompleto = p.NomeCompleto,
+                    Cpf = p.Cpf,
+                    Telefone = p.Telefone,
+                    FlagAprovado = p.FlagAprovado,
+                    DataEnvio = p.DataEnvio,
+                    NomeUsuario = p.Usuario != null ? p.Usuario.Nome : "N/A",
+                    LoginUsuario = p.Usuario != null ? p.Usuario.Login : "N/A"
+                })
+                .ToListAsync();
+
+            return Results.Ok(parceirosPendentes);
+
+        }).WithTags("Parceiro").RequireAuthorization("Administrador");
+
+
         app.MapGet("/parceiro/status-cadastro", async (ConnectMataoContext context, ClaimsPrincipal claims) =>
         {
             var userIdClaim = claims.FindFirst("Id")?.Value;
@@ -306,11 +344,32 @@ internal class Program
             var userId = Guid.Parse(userIdClaim);
 
             var parceiro = await context.ParceiroSet.FirstOrDefaultAsync(p => p.UsuarioId == userId);
-            
-            return parceiro == null
-                ? Results.Ok(new { flagAprovado = false })
-                : Results.Ok(new { flagAprovado = parceiro.FlagAprovado });
-        }).WithTags("Parceiro");
+
+            bool formParceiroExiste = parceiro != null;
+
+            if (parceiro == null)
+            {
+                return Results.Ok(new FormUsuarioParceiroDto
+                {
+                    NomeCompleto = string.Empty,
+                    CPF = string.Empty,
+                    Telefone = string.Empty,
+                    FlagAprovadoParceiro = false,
+                    FormParceiroExiste = formParceiroExiste
+                });
+            }
+            else
+            {
+                return Results.Ok(new FormUsuarioParceiroDto
+                {
+                    NomeCompleto = parceiro.NomeCompleto,
+                    CPF = parceiro.Cpf,
+                    Telefone = parceiro.Telefone,
+                    FlagAprovadoParceiro = parceiro.FlagAprovado,
+                    FormParceiroExiste = formParceiroExiste
+                });
+            }
+        }).WithTags("Parceiro").RequireAuthorization("Parceiro");
 
         app.MapPut("/parceiro/completar-cadastro", (ConnectMataoContext context, ParceiroDto parceiroDto, ClaimsPrincipal claims) =>
         {
@@ -325,9 +384,14 @@ internal class Program
             if (usuario == null)
                 return Results.NotFound(new BaseResponse("Usuário não encontrado."));
 
-            // Validação de perfil permanece a mesma
             if (usuario.Perfil != EnumPerfil.Parceiro)
                 return Results.BadRequest(new BaseResponse("Apenas usuários com perfil de Parceiro podem completar este cadastro."));
+
+            var existingParceiro = context.ParceiroSet.FirstOrDefault(p => p.UsuarioId == userId);
+            if (existingParceiro != null)
+            {
+                return Results.Conflict(new BaseResponse("Você já enviou um formulário de parceiro. Aguarde a aprovação ou entre em contato com o suporte."));
+            }
 
             var parceiro = new Parceiro
             {
@@ -336,13 +400,14 @@ internal class Program
                 NomeCompleto = parceiroDto.NomeCompleto,
                 Cpf = parceiroDto.Cpf,
                 Telefone = parceiroDto.Telefone,
-                FlagAprovado = false, // Inicialmente não aprovado
-                DataEnvio = DateTime.UtcNow // Define a data de envio como agora
+                FlagAprovado = false,
+                DataEnvio = DateTime.UtcNow
             };
-            
+
+            context.ParceiroSet.Add(parceiro);
             context.SaveChanges();
             return Results.Ok(new BaseResponse("Cadastro de parceiro enviado para aprovação com sucesso!"));
-        }).RequireAuthorization("Parceiro").WithTags("Parcerio");
+        }).RequireAuthorization("Parceiro").WithTags("Parceiro");
 
         app.MapPut("/parceiro/aprovar/{id:guid}", (ConnectMataoContext context, Guid id) =>
         {
@@ -365,6 +430,17 @@ internal class Program
             context.SaveChanges();
             return Results.Ok(new BaseResponse("Cadastro de parceiro reprovado com sucesso!"));
         }).RequireAuthorization("Administrador").WithTags("Parceiro");
+
+        app.MapGet("/parceiro/status/{id:guid}", async (ConnectMataoContext context, Guid id) =>
+        {
+            var parceiro = await context.ParceiroSet
+                .FirstOrDefaultAsync(p => p.UsuarioId == id);
+
+            bool isApprovedPartner = parceiro != null && parceiro.FlagAprovado;
+
+            return Results.Ok(new { userId = id, isPartner = isApprovedPartner });
+
+        }).WithTags("Parceiro");
 
         #endregion
 

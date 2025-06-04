@@ -14,7 +14,7 @@
         public string Email { get; set; }
         public DateTime Data { get; set; }
         public string Horario { get; set; }
-        public int FaixaEtaria { get; set; }
+        public string FaixaEtaria { get; set; }
         public bool FlagAprovado { get; set; }
         public Guid UsuarioParceiroid { get; set; }
         public Guid Categoriaid { get; set; }
@@ -42,7 +42,7 @@
             bool flagAprovado,
             Guid usuarioParceiroid,
             string horario,
-            int faixaEtaria,
+           string faixaEtaria,
             string whatsapp)
         {
             Id = Guid.NewGuid();
