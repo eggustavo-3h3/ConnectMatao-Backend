@@ -13,7 +13,9 @@ namespace connectMatao.Domain.DTOs.Usuario
                 .NotEmpty().WithMessage("Nova senha é obrigatória.")
                 .MinimumLength(8).WithMessage("Nova senha deve ter no mínimo 8 caracteres.")
                 .Matches("[A-Z]").WithMessage("A senha deve conter pelo menos uma letra maiúscula.")
-                .Matches(@"^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ]").WithMessage("O nome deve começar com uma letra maiúscula.");
+                .Matches(@"^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ]").WithMessage("O nome deve começar com uma letra maiúscula.")
+                .Matches("[0-9]").WithMessage("A senha deve conter pelo menos um número.")
+                .Matches("[^a-zA-Z0-9]").WithMessage("A senha deve conter pelo menos um caractere especial.");
             RuleFor(x => x)
                 .Must(dto => dto.NovaSenha != dto.SenhaAtual)
                 .WithMessage("A nova senha não pode ser igual à senha atual.");
