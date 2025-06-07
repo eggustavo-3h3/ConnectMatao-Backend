@@ -11,6 +11,7 @@ using connectMatao.Domain.Entities;
 using connectMatao.Enumerator;
 using connectMatao.Infra.Data.Context;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -509,11 +510,12 @@ internal class Program
             return Results.Ok(new BaseResponse("Evento removido com Sucesso!"));
         }).RequireAuthorization().WithTags("Evento");
 
-        app.MapGet("/evento/listar", async (ConnectMataoContext context) =>
+        app.MapGet("/evento/listar", async (ConnectMataoContext context, [FromQuery] string titulo) =>
         {
             var eventos = await context.Set<Evento>()
                 .Include(e => e.UsuarioParceiro)
                 .Include(e => e.EventoImagens)
+                .Where(e => e.Titulo.Contains(titulo))
                 .Select(e => new
                 {
                     e.Id,
@@ -661,36 +663,45 @@ internal class Program
             if (evt == null) 
                 return Results.NotFound(new BaseResponse("Evento não encontrado."));
 
-            context.EventoEstatisticaSet.Add(new EventoEstatisticas
-            {
-                Id = Guid.NewGuid(),
-                Eventoid = eventoId,
-                Usuarioid = userId,
-                TipoEstatistica = EnumTipoEstatistica.Like
-            });
+            var eventoEstatistica = context.EventoEstatisticaSet.FirstOrDefault(
+                p => p.Eventoid == eventoId && 
+                p.Usuarioid == userId &&
+                p.TipoEstatistica == EnumTipoEstatistica.Like);
+
+            if (eventoEstatistica != null)
+                context.EventoEstatisticaSet.Remove(eventoEstatistica);
+            else
+                context.EventoEstatisticaSet.Add(new EventoEstatisticas
+                {
+                    Id = Guid.NewGuid(),
+                    Eventoid = eventoId,
+                    Usuarioid = userId,
+                    TipoEstatistica = EnumTipoEstatistica.Like
+                });
+
             await context.SaveChangesAsync();
-            return Results.Ok(new BaseResponse("Like adicionado ao evento."));
+            return Results.Ok(new BaseResponse("Reação registrada com sucesso."));
         }).RequireAuthorization().WithTags("Evento");
 
-        app.MapDelete("/eventos/{eventoId:guid}/likes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
-        {
-            var userIdClaim = claims.FindFirst("Id")?.Value;
-            if (userIdClaim == null)
-                return Results.Unauthorized();
+        //app.MapDelete("/eventos/{eventoId:guid}/likes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
+        //{
+        //    var userIdClaim = claims.FindFirst("Id")?.Value;
+        //    if (userIdClaim == null)
+        //        return Results.Unauthorized();
 
-            var userId = Guid.Parse(userIdClaim);
+        //    var userId = Guid.Parse(userIdClaim);
 
-            var stat = await context.EventoEstatisticaSet
-                .FirstOrDefaultAsync(es => es.Eventoid == eventoId
-                                           && es.Usuarioid == userId
-                                           && es.TipoEstatistica == EnumTipoEstatistica.Like);
-            if (stat == null) 
-                return Results.NotFound();
+        //    var stat = await context.EventoEstatisticaSet
+        //        .FirstOrDefaultAsync(es => es.Eventoid == eventoId
+        //                                   && es.Usuarioid == userId
+        //                                   && es.TipoEstatistica == EnumTipoEstatistica.Like);
+        //    if (stat == null) 
+        //        return Results.NotFound();
 
-            context.EventoEstatisticaSet.Remove(stat);
-            await context.SaveChangesAsync();
-            return Results.NoContent();
-        }).RequireAuthorization().WithTags("Evento");
+        //    context.EventoEstatisticaSet.Remove(stat);
+        //    await context.SaveChangesAsync();
+        //    return Results.NoContent();
+        //}).RequireAuthorization().WithTags("Evento");
 
         app.MapPost("/eventos/{eventoId:guid}/deslikes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
         {
@@ -703,39 +714,47 @@ internal class Program
             var evt = await context.EventoSet.FindAsync(eventoId);
             if (evt == null) 
                 return Results.NotFound(new BaseResponse("Evento não encontrado."));
-            
-            context.EventoEstatisticaSet.Add(new EventoEstatisticas
-            {
-                Id = Guid.NewGuid(),
-                Eventoid = eventoId,
-                Usuarioid = userId,
-                TipoEstatistica = EnumTipoEstatistica.Deslike
-            });
+
+            var eventoEstatistica = context.EventoEstatisticaSet.FirstOrDefault(
+                p => p.Eventoid == eventoId &&
+                     p.Usuarioid == userId &&
+                     p.TipoEstatistica == EnumTipoEstatistica.Deslike);
+
+            if (eventoEstatistica != null)
+                context.EventoEstatisticaSet.Remove(eventoEstatistica);
+            else
+                context.EventoEstatisticaSet.Add(new EventoEstatisticas
+                {
+                    Id = Guid.NewGuid(),
+                    Eventoid = eventoId,
+                    Usuarioid = userId,
+                    TipoEstatistica = EnumTipoEstatistica.Deslike
+                });
 
             await context.SaveChangesAsync();
-            return Results.Ok(new BaseResponse("Deslike adicionado ao evento."));
+            return Results.Ok(new BaseResponse("Reação registrada com sucesso."));
         }).RequireAuthorization("UsuarioAutenticado").WithTags("Evento");
 
-        app.MapDelete("/eventos/{eventoId:guid}/deslikes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
-        {
-            var userIdClaim = claims.FindFirst("Id")?.Value;
-            if (userIdClaim == null)
-                return Results.Unauthorized();
+        //app.MapDelete("/eventos/{eventoId:guid}/deslikes", async (Guid eventoId, ConnectMataoContext context, ClaimsPrincipal claims) =>
+        //{
+        //    var userIdClaim = claims.FindFirst("Id")?.Value;
+        //    if (userIdClaim == null)
+        //        return Results.Unauthorized();
 
-            var userId = Guid.Parse(userIdClaim);
+        //    var userId = Guid.Parse(userIdClaim);
 
-            var stat = await context.EventoEstatisticaSet
-                .FirstOrDefaultAsync(es => es.Eventoid == eventoId
-                                           && es.Usuarioid == userId
-                                           && es.TipoEstatistica == EnumTipoEstatistica.Deslike);
+        //    var stat = await context.EventoEstatisticaSet
+        //        .FirstOrDefaultAsync(es => es.Eventoid == eventoId
+        //                                   && es.Usuarioid == userId
+        //                                   && es.TipoEstatistica == EnumTipoEstatistica.Deslike);
             
-            if (stat == null) 
-                return Results.NotFound();
+        //    if (stat == null) 
+        //        return Results.NotFound();
 
-            context.EventoEstatisticaSet.Remove(stat);
-            await context.SaveChangesAsync();
-            return Results.NoContent();
-        }).RequireAuthorization("UsuarioAutenticado").WithTags("Evento");
+        //    context.EventoEstatisticaSet.Remove(stat);
+        //    await context.SaveChangesAsync();
+        //    return Results.NoContent();
+        //}).RequireAuthorization("UsuarioAutenticado").WithTags("Evento");
 
         app.MapGet("/eventos/{eventoId:guid}/estatisticas", async (Guid eventoId, ConnectMataoContext context) =>
         {
