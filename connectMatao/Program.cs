@@ -337,7 +337,7 @@ internal class Program
                     Cpf = p.Cpf,
                     Telefone = p.Telefone,
                     FlagAprovado = p.FlagAprovado,
-                    DataEnvio = p.DataEnvio.Kind == DateTimeKind.Utc ? p.DataEnvio : p.DataEnvio.ToUniversalTime(),
+                    DataEnvio = p.DataEnvio, //.Kind == DateTimeKind.Utc ? p.DataEnvio : p.DataEnvio.ToUniversalTime(),
                     NomeUsuario = p.Usuario != null ? p.Usuario.Nome : "N/A",
                     LoginUsuario = p.Usuario != null ? p.Usuario.Login : "N/A"
                 })
@@ -346,7 +346,6 @@ internal class Program
             return Results.Ok(parceirosPendentes);
 
         }).WithTags("Parceiro").RequireAuthorization("Administrador");
-
 
         app.MapGet("/parceiro/status-cadastro", async (ConnectMataoContext context, ClaimsPrincipal claims) =>
         {
@@ -414,7 +413,7 @@ internal class Program
                 Cpf = parceiroDto.Cpf,
                 Telefone = parceiroDto.Telefone,
                 FlagAprovado = false,
-                DataEnvio = DateTime.UtcNow
+                DataEnvio = DateTime.Now
             };
 
             context.ParceiroSet.Add(parceiro);
