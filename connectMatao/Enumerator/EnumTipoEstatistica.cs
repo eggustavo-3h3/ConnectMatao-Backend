@@ -1,9 +1,9 @@
-﻿namespace connectMatao.Enumerator
-{
-    public enum EnumTipoEstatistica
+﻿    namespace connectMatao.Enumerator
     {
-        Like = 1,
-        Deslike = 2,
-        Pontuacao = 3
+        public enum EnumTipoEstatistica
+        {
+            Like = 1,
+            Deslike = 2,
+            Pontuacao = 3
+        }
     }
-}

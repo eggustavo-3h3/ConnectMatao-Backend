@@ -24,6 +24,7 @@
         public int Likes { get; set; }
         public int Deslikes { get; set; }
         public int UsuarioInteragiu { get; set; }
+        public string CategoriaNome { get; set; }
     }
 
     public class EventoImagemDto
