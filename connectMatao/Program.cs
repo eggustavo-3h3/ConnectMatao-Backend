@@ -957,7 +957,7 @@ internal class Program
                 context.SaveChanges();
 
                 var emailService = new EmailService();
-                var enviarEmailResponse = emailService.EnviarEmail(gerarResetSenhaDto.Email, "Reset de Senha", $"http://localhost:4200/reset-senha/{usuario.ChaveResetSenha}", true);
+                var enviarEmailResponse = emailService.EnviarEmail(gerarResetSenhaDto.Email, "Reset de Senha", $"https://connectmatao.tccnapratica.com.br/reset-senha/{usuario.ChaveResetSenha}", true);
                 if (!enviarEmailResponse.Sucesso)
                     return Results.BadRequest(new BaseResponse("Erro ao enviar o e-mail: " + enviarEmailResponse.Mensagem));
             }
